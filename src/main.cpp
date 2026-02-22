@@ -92,6 +92,41 @@ uint16_t axis_values[2] = {512, 512};      // USB joystick values (0-1023)
 uint8_t active_motor = 0;                  // Currently active motor (0 or 1)
 
 // ============================================================================
+// RUNTIME PID PARAMETER STORAGE (Online Parameter Transfer)
+// ============================================================================
+// Allows real-time adjustment of PID gains via serial commands
+// Format: "PID 0 P 8.257" or "VEL 0 P 5.440"
+// Commands: PID/VEL <motor_id> <P|I|D> <value>
+
+struct PIDGains {
+  float P, I, D;
+};
+
+// Current running PID gains (initialized from pid_config.h in setup())
+PIDGains angle_gains[2] = {
+  {MOTOR0_PID_P, MOTOR0_PID_I, MOTOR0_PID_D},
+  #if NUM_MOTORS > 1
+  {MOTOR1_PID_P, MOTOR1_PID_I, MOTOR1_PID_D}
+  #else
+  {20.0f, 0.0f, 0.5f}  // Placeholder
+  #endif
+};
+
+PIDGains velocity_gains[2] = {
+  {MOTOR0_VELOCITY_P, MOTOR0_VELOCITY_I, MOTOR0_VELOCITY_D},
+  #if NUM_MOTORS > 1
+  {MOTOR1_VELOCITY_P, MOTOR1_VELOCITY_I, MOTOR1_VELOCITY_D}
+  #else
+  {0.125f, 10.0f, 0.0f}  // Placeholder
+  #endif
+};
+
+// Serial command buffer for parameter updates
+#define SERIAL_CMD_BUFFER 64
+char serial_cmd_buffer[SERIAL_CMD_BUFFER] = {0};
+uint8_t serial_cmd_index = 0;
+
+// ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
 
@@ -101,6 +136,193 @@ void handle_motor_limits(uint8_t motor_id, float& angle);
 uint16_t angle_to_joystick_value(uint8_t motor_id);
 void setup_usb_hid();
 void send_hid_report();
+void handle_serial_command(const char* cmd);
+void apply_pid_gains(uint8_t motor_id);
+void print_current_gains();
+
+// ============================================================================
+// SERIAL COMMAND HANDLER (Online PID Parameter Transfer)
+// ============================================================================
+
+/**
+ * Parse and execute serial commands for PID parameter updates
+ * 
+ * Commands:
+ *   PID <motor> <P|I|D> <value>  - Set angle controller gain
+ *   VEL <motor> <P|I|D> <value>  - Set velocity controller gain
+ *   SHOW / GET                     - Print current gains
+ *   APPLY <motor>                  - Apply gains to motor controller
+ * 
+ * Examples:
+ *   PID 0 P 8.257
+ *   VEL 0 I 31.561
+ *   SHOW
+ *   APPLY 0
+ */
+void handle_serial_command(const char* cmd) {
+  // Skip whitespace
+  while (*cmd == ' ' || *cmd == '\t') cmd++;
+  
+  if (strlen(cmd) == 0) return;
+  
+  // Parse command type
+  if (strncmp(cmd, "PID", 3) == 0) {
+    // Format: PID <motor> <P|I|D> <value>
+    uint8_t motor_id = 0;
+    char param = 'P';
+    float value = 0.0f;
+    
+    int parsed = sscanf(cmd, "PID %hhu %c %f", &motor_id, &param, &value);
+    if (parsed != 3 || motor_id >= 2) {
+      Serial.println("ERROR: Format is 'PID <motor_id 0-1> <P|I|D> <value>'");
+      return;
+    }
+    
+    param = toupper(param);
+    switch (param) {
+      case 'P':
+        angle_gains[motor_id].P = value;
+        Serial.print("Motor ");
+        Serial.print(motor_id);
+        Serial.print(" Angle Kp = ");
+        Serial.println(value, 6);
+        break;
+      case 'I':
+        angle_gains[motor_id].I = value;
+        Serial.print("Motor ");
+        Serial.print(motor_id);
+        Serial.print(" Angle Ki = ");
+        Serial.println(value, 6);
+        break;
+      case 'D':
+        angle_gains[motor_id].D = value;
+        Serial.print("Motor ");
+        Serial.print(motor_id);
+        Serial.print(" Angle Kd = ");
+        Serial.println(value, 6);
+        break;
+      default:
+        Serial.println("ERROR: Parameter must be P, I, or D");
+        return;
+    }
+    
+    // Immediately apply the gain
+    apply_pid_gains(motor_id);
+    
+  } else if (strncmp(cmd, "VEL", 3) == 0) {
+    // Format: VEL <motor> <P|I|D> <value>
+    uint8_t motor_id = 0;
+    char param = 'P';
+    float value = 0.0f;
+    
+    int parsed = sscanf(cmd, "VEL %hhu %c %f", &motor_id, &param, &value);
+    if (parsed != 3 || motor_id >= 2) {
+      Serial.println("ERROR: Format is 'VEL <motor_id 0-1> <P|I|D> <value>'");
+      return;
+    }
+    
+    param = toupper(param);
+    switch (param) {
+      case 'P':
+        velocity_gains[motor_id].P = value;
+        Serial.print("Motor ");
+        Serial.print(motor_id);
+        Serial.print(" Velocity Kp = ");
+        Serial.println(value, 6);
+        break;
+      case 'I':
+        velocity_gains[motor_id].I = value;
+        Serial.print("Motor ");
+        Serial.print(motor_id);
+        Serial.print(" Velocity Ki = ");
+        Serial.println(value, 6);
+        break;
+      case 'D':
+        velocity_gains[motor_id].D = value;
+        Serial.print("Motor ");
+        Serial.print(motor_id);
+        Serial.print(" Velocity Kd = ");
+        Serial.println(value, 6);
+        break;
+      default:
+        Serial.println("ERROR: Parameter must be P, I, or D");
+        return;
+    }
+    
+    // Immediately apply the gain
+    apply_pid_gains(motor_id);
+    
+  } else if (strncmp(cmd, "SHOW", 4) == 0 || strncmp(cmd, "GET", 3) == 0) {
+    print_current_gains();
+    
+  } else if (strncmp(cmd, "APPLY", 5) == 0) {
+    // Format: APPLY <motor>
+    uint8_t motor_id = 0;
+    if (sscanf(cmd, "APPLY %hhu", &motor_id) == 1 && motor_id < 2) {
+      apply_pid_gains(motor_id);
+      Serial.print("Gains applied to Motor ");
+      Serial.println(motor_id);
+    } else {
+      Serial.println("ERROR: Format is 'APPLY <motor_id 0-1>'");
+    }
+    
+  } else {
+    Serial.print("ERROR: Unknown command '");
+    Serial.print(cmd);
+    Serial.println("'");
+    Serial.println("Commands: PID, VEL, SHOW, GET, APPLY");
+  }
+}
+
+/**
+ * Apply current runtime gains to motor controller
+ */
+void apply_pid_gains(uint8_t motor_id) {
+  if (motor_id >= 2) return;
+  
+  BLDCMotor* motor = motors[motor_id];
+  if (!motor) return;
+  
+  // Apply angle gains
+  motor->P_angle.P = angle_gains[motor_id].P;
+  motor->P_angle.I = angle_gains[motor_id].I;
+  motor->P_angle.D = angle_gains[motor_id].D;
+  
+  // Apply velocity gains
+  motor->PID_velocity.P = velocity_gains[motor_id].P;
+  motor->PID_velocity.I = velocity_gains[motor_id].I;
+  motor->PID_velocity.D = velocity_gains[motor_id].D;
+  
+  Serial.print("Motor ");
+  Serial.print(motor_id);
+  Serial.println(" gains updated");
+}
+
+/**
+ * Print current PID gains to serial
+ */
+void print_current_gains() {
+  Serial.println("\n=== Current PID Gains ===");
+  for (uint8_t i = 0; i < 2; i++) {
+    Serial.print("Motor ");
+    Serial.println(i);
+    
+    Serial.print("  Angle:    Kp=");
+    Serial.print(angle_gains[i].P, 6);
+    Serial.print("  Ki=");
+    Serial.print(angle_gains[i].I, 6);
+    Serial.print("  Kd=");
+    Serial.println(angle_gains[i].D, 6);
+    
+    Serial.print("  Velocity: Kp=");
+    Serial.print(velocity_gains[i].P, 6);
+    Serial.print("  Ki=");
+    Serial.print(velocity_gains[i].I, 6);
+    Serial.print("  Kd=");
+    Serial.println(velocity_gains[i].D, 6);
+  }
+  Serial.println("");
+}
 
 // ============================================================================
 // PHASE 3: MIDI INPUT HANDLER
@@ -451,6 +673,27 @@ void loop() {
   // Format: Standard 3-byte MIDI CC messages
   while (usb_midi.available()) {
     handle_midi_byte(usb_midi.read());
+  }
+  
+  // ===== 2.5. Serial Command Input (Online PID Parameter Transfer) =====
+  // Read ASCII commands for real-time PID gain adjustment
+  // Format: "PID 0 P 8.257" or "VEL 0 I 10.0" or "SHOW"
+  while (Serial.available()) {
+    int ch = Serial.read();
+    
+    if (ch == '\n' || ch == '\r') {
+      // Process command on newline
+      if (serial_cmd_index > 0) {
+        serial_cmd_buffer[serial_cmd_index] = '\0';
+        handle_serial_command(serial_cmd_buffer);
+        serial_cmd_index = 0;
+      }
+    } else if (ch >= 32 && ch < 127) {
+      // Accumulate printable characters
+      if (serial_cmd_index < SERIAL_CMD_BUFFER - 1) {
+        serial_cmd_buffer[serial_cmd_index++] = ch;
+      }
+    }
   }
   
   // ===== 3. USB HID Output (~100 Hz) =====
