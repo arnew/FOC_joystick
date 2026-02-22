@@ -17,6 +17,12 @@ import os
 from pathlib import Path
 from serial.tools import list_ports
 
+try:
+    import pygame.midi
+    PYGAME_MIDI_AVAILABLE = True
+except ImportError:
+    PYGAME_MIDI_AVAILABLE = False
+
 
 def _parse_vid_pid(val):
     if val is None:
@@ -126,11 +132,19 @@ class HIDControllerTestSuite:
             midi_port = midi_port or found_midi
 
         self.debug_port = debug_port
-        self.midi_port = midi_port
+        self.midi_port = midi_port  # May still be used for backwards compat logging
         self.debug_ser = None
         self.midi_ser = None
+        self.midi_output = None  # pygame.midi output device
         self.results = []
         self.firmware_info = {}
+        
+        # Initialize pygame.midi for native USB MIDI
+        if PYGAME_MIDI_AVAILABLE:
+            try:
+                pygame.midi.init()
+            except:
+                pass
         
     @staticmethod
     def _find_port(port_type, baudrate):
@@ -141,10 +155,10 @@ class HIDControllerTestSuite:
         return ports[0] if port_type == "debug" else (ports[1] if len(ports) > 1 else ports[0])
     
     def connect(self):
-        """Connect to both serial ports"""
+        """Connect to debug serial and native USB MIDI"""
         try:
-            if not self.debug_port and not self.midi_port:
-                print("✗ No serial ports detected. Connect RP2040 and/or set DEBUG_PORT/MIDI_PORT environment variables.")
+            if not self.debug_port:
+                print("✗ No debug serial port detected. Connect RP2040 and/or set DEBUG_PORT environment variable.")
                 print("   You can also run test/run_tests.sh which attempts upload and waits for enumeration.")
                 return False
 
@@ -154,11 +168,33 @@ class HIDControllerTestSuite:
             else:
                 print("⚠ Debug serial not found; some tests may be skipped")
 
-            if self.midi_port:
-                self.midi_ser = serial.Serial(self.midi_port, 31250, timeout=2)
-                print(f"✓ MIDI serial: {self.midi_port} @ 31250 baud")
-            else:
-                print("⚠ MIDI serial not found; MIDI tests will be skipped")
+            # Try native USB MIDI via pygame.midi
+            midi_found = False
+            if PYGAME_MIDI_AVAILABLE:
+                try:
+                    for i in range(pygame.midi.get_count()):
+                        info = pygame.midi.get_device_info(i)
+                        # Look for "Pico MIDI" output port (mode 0 = output)
+                        if b"Pico" in info[1] and info[4] == 0:  # mode 0 = output
+                            self.midi_output = pygame.midi.Output(i)
+                            print(f"✓ Native USB MIDI: {info[1].decode()} (pygame.midi output)")
+                            midi_found = True
+                            break
+                except Exception as e:
+                    print(f"⚠ Native USB MIDI initialization failed: {e}")
+            
+            if not midi_found:
+                # Fallback: try serial MIDI if available (for backwards compatibility)
+                if self.midi_port:
+                    try:
+                        self.midi_ser = serial.Serial(self.midi_port, 31250, timeout=2)
+                        print(f"✓ MIDI serial (fallback): {self.midi_port} @ 31250 baud")
+                        midi_found = True
+                    except:
+                        pass
+            
+            if not midi_found:
+                print("⚠ No MIDI input found (native USB MIDI or serial); MIDI tests will be skipped")
 
             time.sleep(2)  # Wait for firmware startup
             return True
@@ -167,11 +203,16 @@ class HIDControllerTestSuite:
             return False
 
     def close(self):
-        """Close serial connections"""
+        """Close serial and MIDI connections"""
         if self.debug_ser:
             self.debug_ser.close()
         if self.midi_ser:
             self.midi_ser.close()
+        if self.midi_output:
+            try:
+                self.midi_output.close()
+            except:
+                pass
 
     def read_debug_lines(self, timeout=1.0, max_lines=50):
         """Read lines from debug serial port"""
@@ -193,17 +234,27 @@ class HIDControllerTestSuite:
         return lines
 
     def send_midi_cc(self, cc_num, cc_val):
-        """Send MIDI CC message"""
-        if not self.midi_ser:
-            return False
-        
-        # MIDI CC: 0xBn, CC#, value
-        msg = bytes([0xB0, cc_num & 0x7F, cc_val & 0x7F])
-        try:
-            self.midi_ser.write(msg)
-            self.midi_ser.flush()
-            return True
-        except:
+        """Send MIDI CC message via native USB MIDI or serial fallback"""
+        if self.midi_output:
+            # Use native USB MIDI (pygame.midi)
+            try:
+                # pygame.midi.Output.write() expects list of (status, data1, data2, data3) tuples
+                # For CC: [status=0xB0, data1=cc_num, data2=cc_val, data3=0]
+                self.midi_output.write([[[0xB0, cc_num & 0x7F, cc_val & 0x7F, 0], pygame.midi.time()]])
+                return True
+            except Exception as e:
+                print(f"⚠ pygame.midi CC send failed: {e}")
+                return False
+        elif self.midi_ser:
+            # Fallback: serial MIDI
+            try:
+                msg = bytes([0xB0, cc_num & 0x7F, cc_val & 0x7F])
+                self.midi_ser.write(msg)
+                self.midi_ser.flush()
+                return True
+            except:
+                return False
+        else:
             return False
 
     def test_system_identification(self):

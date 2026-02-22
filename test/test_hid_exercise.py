@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """HID exercise test — send MIDI CC and verify HID joystick axis changes via pygame
 
-Requirements: `pygame`, `pyserial`
+Requirements: `pygame`, `pygame.midi`
 
 Behaviour:
-- Use `MIDI_PORT` env var if set, otherwise auto-detect a serial port
+- Use native USB MIDI (pygame.midi) to send CC commands to device
 - Probe for a pygame joystick device and read axis samples
 - Send MIDI CC messages to move the axis and assert the joystick axis value changes
 """
@@ -12,48 +12,52 @@ Behaviour:
 import os
 import time
 import sys
-import serial
-from serial.tools import list_ports
+
+try:
+    import pygame
+    import pygame.midi
+except ImportError as e:
+    print(f"ERROR: pygame or pygame.midi not available: {e}")
+    sys.exit(2)
 
 TIMEOUT = int(os.environ.get("HID_WAIT_TIMEOUT", "10"))
-MIDI_BAUD = 31250
 
 
-def find_midi_port():
-    env = os.environ.get("MIDI_PORT")
-    if env:
-        return env
-    ports = list_ports.comports()
-    # prefer ACM ports
-    candidates = [p.device for p in ports if p.device.startswith('/dev/ttyACM') or p.device.startswith('/dev/ttyUSB')]
-    return candidates[0] if candidates else None
-
-
-def open_midi(port):
+def find_native_midi_output():
+    """Find and open native USB MIDI output port (Pico MIDI)"""
     try:
-        ser = serial.Serial(port, MIDI_BAUD, timeout=0.1)
-        # give firmware a moment
-        time.sleep(0.05)
-        return ser
+        pygame.midi.init()
+        for i in range(pygame.midi.get_count()):
+            info = pygame.midi.get_device_info(i)
+            # Look for "Pico MIDI" output port (mode 0 = output)
+            if b"Pico" in info[1] and info[4] == 0:  # mode 0 = output
+                output = pygame.midi.Output(i)
+                print(f"OK: Native USB MIDI output: {info[1].decode()}")
+                return output
     except Exception as e:
-        print(f"ERROR: could not open MIDI port {port}: {e}")
-        return None
+        print(f"ERROR: pygame.midi initialization failed: {e}")
+    
+    print("ERROR: No native USB MIDI (Pico MIDI) output found")
+    return None
 
 
-def send_midi_cc(ser, cc, val):
-    msg = bytes([0xB0, cc & 0x7F, val & 0x7F])
-    ser.write(msg)
-    ser.flush()
+def send_midi_cc(output, cc, val):
+    """Send MIDI CC message via native USB MIDI"""
+    try:
+        # pygame.midi.Output.write() expects list of (status, data1, data2, data3) tuples
+        output.write([[[0xB0, cc & 0x7F, val & 0x7F, 0], pygame.midi.time()]])
+    except Exception as e:
+        print(f"ERROR: Failed to send MIDI CC: {e}")
+        raise
 
 
 def probe_pygame(timeout=TIMEOUT):
     try:
-        import pygame
+        pygame.init()
     except Exception as e:
         print(f"SKIP: pygame not available: {e}")
         return None
 
-    pygame.init()
     pygame.joystick.init()
     end = time.time() + timeout
     while time.time() < end:
@@ -82,19 +86,15 @@ def read_axes(js, n=2):
 
 
 def main():
-    midi_port = find_midi_port()
-    if not midi_port:
-        print("✗ FAIL: No MIDI serial port found (set MIDI_PORT env var)")
-        sys.exit(2)
-
-    ser = open_midi(midi_port)
-    if not ser:
+    midi_output = find_native_midi_output()
+    if not midi_output:
+        print("✗ FAIL: No native USB MIDI output found")
         sys.exit(2)
 
     js = probe_pygame()
     if not js:
         print("✗ SKIP: No joystick device via pygame")
-        ser.close()
+        midi_output.close()
         sys.exit(0)
 
     # Sample baseline
@@ -103,19 +103,25 @@ def main():
 
     # Send CC to move axis (use CC#64 as existing tests use)
     print("Sending MIDI CC#64 -> 0")
-    send_midi_cc(ser, 64, 0)
+    try:
+        send_midi_cc(midi_output, 64, 0)
+    except:
+        sys.exit(2)
     time.sleep(0.35)
     a0 = read_axes(js, n=2)
     print(f"After CC=0 axes: {a0}")
 
     print("Sending MIDI CC#64 -> 127")
-    send_midi_cc(ser, 64, 127)
+    try:
+        send_midi_cc(midi_output, 64, 127)
+    except:
+        sys.exit(2)
     # allow motor + HID update
     time.sleep(0.5)
     a1 = read_axes(js, n=2)
     print(f"After CC=127 axes: {a1}")
 
-    ser.close()
+    midi_output.close()
 
     # Evaluate significant axis change on axis 0
     if not baseline or not a0 or not a1:

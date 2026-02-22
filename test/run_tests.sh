@@ -46,8 +46,9 @@ if [ "${found}" -ne 1 ]; then
 fi
 
 echo "Running automated tests..."
-# If multiple ACM devices are present, prefer ACM0=DEBUG and ACM1=MIDI unless overridden
-if [ -z "${DEBUG_PORT:-}" ] || [ -z "${MIDI_PORT:-}" ]; then
+# After CDC MIDI removal, only 1 ACM device (debug serial) should enumerate
+# MIDI input is now native USB MIDI, not a serial port
+if [ -z "${DEBUG_PORT:-}" ]; then
   acm=(/dev/ttyACM*)
   usb=(/dev/ttyUSB*)
   # combine preferred ordering
@@ -59,14 +60,9 @@ if [ -z "${DEBUG_PORT:-}" ] || [ -z "${MIDI_PORT:-}" ]; then
     if [ -e "$d" ]; then devs+=("$d"); fi
   done
 
-  if [ ${#devs[@]} -ge 2 ]; then
+  if [ ${#devs[@]} -ge 1 ]; then
     export DEBUG_PORT=${devs[0]}
-    export MIDI_PORT=${devs[1]}
-    echo "Auto-set DEBUG_PORT=${DEBUG_PORT} MIDI_PORT=${MIDI_PORT}"
-  elif [ ${#devs[@]} -eq 1 ]; then
-    export DEBUG_PORT=${devs[0]}
-    export MIDI_PORT=${devs[0]}
-    echo "Auto-set DEBUG_PORT=MIDI_PORT=${devs[0]}"
+    echo "Auto-set DEBUG_PORT=${DEBUG_PORT}"
   fi
 fi
 
