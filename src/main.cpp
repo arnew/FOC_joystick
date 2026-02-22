@@ -271,33 +271,44 @@ uint16_t angle_to_joystick_value(uint8_t motor_id) {
 
 // HID Joystick Report Structure
 typedef struct {
-  uint16_t x;  // Motor 0 axis
-  uint16_t y;  // Motor 1 axis
+  uint8_t buttons; // 8 buttons mapped to bits 0..7
+  uint16_t x;      // Motor 0 axis (0..1023)
+  uint16_t y;      // Motor 1 axis (0..1023)
 } __attribute__((packed)) hid_joystick_report_t;
 
-hid_joystick_report_t current_report = {512, 512};
+hid_joystick_report_t current_report = {0, 512, 512};
 
 /**
  * Initialize USB HID Joystick
  * TODO: Implement with proper TinyUSB or RP2040 USB library
  */
 void setup_usb_hid() {
-  // Define a simple HID report descriptor: 2 axes, 16-bit each (0..1023)
+  // HID report descriptor: Report ID 1, 8 buttons + 2 axes (16-bit, 0..1023)
+  // This layout matches common gamepad descriptors that the Linux kernel
+  // maps to an /dev/input/event* (evdev) device and /dev/input/js*.
   static const uint8_t hid_report_descriptor[] = {
     0x05, 0x01,       // Usage Page (Generic Desktop)
-    0x09, 0x04,       // Usage (Joystick)
+    0x09, 0x05,       // Usage (Game Pad)
     0xA1, 0x01,       // Collection (Application)
-    0x09, 0x01,       //   Usage (Pointer)
-    0xA1, 0x00,       //   Collection (Physical)
-    0x05, 0x01,       //     Usage Page (Generic Desktop)
-    0x09, 0x30,       //     Usage (X)
-    0x09, 0x31,       //     Usage (Y)
-    0x15, 0x00,       //     Logical Minimum (0)
-    0x26, 0xFF, 0x03, //     Logical Maximum (1023)
-    0x75, 0x10,       //     Report Size (16)
-    0x95, 0x02,       //     Report Count (2)
-    0x81, 0x02,       //     Input (Data,Var,Abs)
-    0xC0,             //   End Collection
+    0x85, 0x01,       //   Report ID (1)
+    // Buttons (8)
+    0x05, 0x09,       //   Usage Page (Button)
+    0x19, 0x01,       //   Usage Minimum (Button 1)
+    0x29, 0x08,       //   Usage Maximum (Button 8)
+    0x15, 0x00,       //   Logical Minimum (0)
+    0x25, 0x01,       //   Logical Maximum (1)
+    0x95, 0x08,       //   Report Count (8)
+    0x75, 0x01,       //   Report Size (1)
+    0x81, 0x02,       //   Input (Data,Var,Abs)
+    // Axes (X, Y) 16-bit each, 0..1023
+    0x05, 0x01,       //   Usage Page (Generic Desktop)
+    0x09, 0x30,       //   Usage (X)
+    0x09, 0x31,       //   Usage (Y)
+    0x16, 0x00, 0x00, //   Logical Minimum (0)
+    0x26, 0xFF, 0x03, //   Logical Maximum (1023)
+    0x75, 0x10,       //   Report Size (16)
+    0x95, 0x02,       //   Report Count (2)
+    0x81, 0x02,       //   Input (Data,Var,Abs)
     0xC0              // End Collection
   };
 
@@ -319,8 +330,8 @@ void send_hid_report() {
     current_report.y = axis_values[1];
 
     if (usb_hid.ready()) {
-      // report id 0, send raw packed report
-      usb_hid.sendReport(0, &current_report, sizeof(current_report));
+      // report id 1 matches the descriptor's Report ID (0x85, 0x01)
+      usb_hid.sendReport(1, &current_report, sizeof(current_report));
     }
   }
 }
@@ -330,6 +341,9 @@ void send_hid_report() {
 // ============================================================================
 
 void setup() {
+    // ===== USB HID Setup =====
+  setup_usb_hid();
+
   // Initialize dual USB CDC
   // Serial (CDC#0): Debug output at 115200 baud (built-in via Arduino)
   // usb_cdc_midi (CDC#1): MIDI input at 31250 baud  
@@ -337,7 +351,7 @@ void setup() {
   usb_cdc_midi.begin(31250);
   
   // Wait for USB enumeration
-  delay(2000);
+  //delay(2000);
   
   Serial.println("\n=== USB HID Joystick Controller ===");
   Serial.println("Dual USB CDC Initialized:");
@@ -369,8 +383,7 @@ void setup() {
   // TODO: Configure separate driver/encoder pins
   Serial.println("Motor 1 disabled (placeholder)");
   
-  // ===== USB HID Setup =====
-  setup_usb_hid();
+
   
   // ===== Configuration Output =====
   Serial.println("\n=== Loaded Configuration ===");
