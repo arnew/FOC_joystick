@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Basic HID report presence test.
+"""HID / Joystick presence test.
 
-- Waits for a /dev/hidraw* device to appear.
-- Attempts a non-blocking read (may require root). If permission denied, skips.
-- Passing criteria: hidraw device exists and is readable (or skip on permission).
+- Prefer `/dev/input/js*` (joystick devices) and try to open with `pygame` if
+  available.
+- Fallback: check `/dev/hidraw*` and `/dev/input/js*` and attempt a non-blocking
+  open/read. If permission is denied, the test is skipped with a helpful message.
+
+Exit codes / behaviour:
+- 0: PASS or SKIP (device present but permission-limited is reported as SKIP)
+- non-zero is not used here to avoid failing CI on permission-limited hosts.
 """
 
 import glob
@@ -12,6 +17,44 @@ import sys
 import time
 
 TIMEOUT = int(os.environ.get("HID_WAIT_TIMEOUT", "10"))
+
+
+def try_pygame_js(timeout=TIMEOUT):
+    try:
+        import pygame
+    except Exception:
+        return False
+
+    try:
+        pygame.init()
+        pygame.joystick.init()
+        end = time.time() + timeout
+        while time.time() < end:
+            js_count = pygame.joystick.get_count()
+            if js_count > 0:
+                js = pygame.joystick.Joystick(0)
+                js.init()
+                name = js.get_name()
+                axes = js.get_numaxes()
+                vals = [js.get_axis(i) for i in range(min(axes, 4))]
+                print(f"OK: pygame joystick detected: {name} axes={axes} sample={vals}")
+                return True
+            time.sleep(0.25)
+        return False
+    except Exception as e:
+        print(f"WARN: pygame joystick probe failed: {e}")
+        return False
+
+
+def find_js(timeout=TIMEOUT):
+    end = time.time() + timeout
+    while time.time() < end:
+        devices = sorted(glob.glob('/dev/input/js*'))
+        if devices:
+            return devices
+        time.sleep(0.5)
+    return []
+
 
 def find_hidraw(timeout=TIMEOUT):
     end = time.time() + timeout
@@ -23,7 +66,7 @@ def find_hidraw(timeout=TIMEOUT):
     return []
 
 
-def try_read(device):
+def try_open_nonblocking(device):
     try:
         fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK)
     except PermissionError:
@@ -34,7 +77,6 @@ def try_read(device):
         return False
 
     try:
-        # attempt a small read; HID reports are typically small
         data = os.read(fd, 64)
         if data:
             print(f"OK: Read {len(data)} bytes from {device}: {data[:16]!r}...")
@@ -56,26 +98,47 @@ def try_read(device):
 
 
 def main():
-    print(f"Waiting up to {TIMEOUT}s for /dev/hidraw*...")
-    devices = find_hidraw()
-    if not devices:
-        print("SKIP: No /dev/hidraw devices found — HID may not be enumerated on this host")
+    # 1) Try pygame joystick API (preferred for joystick HID testing)
+    print(f"Probing with pygame for up to {TIMEOUT}s...")
+    if try_pygame_js():
+        print("PASS: joystick detected via pygame")
         sys.exit(0)
 
-    print(f"Found hidraw devices: {devices}")
-    # Prefer the first device
-    dev = devices[0]
-    result = try_read(dev)
-    if result is True:
-        print("PASS: HID device present and readable")
-        sys.exit(0)
-    elif result is None:
-        print("SKIP: Could not open device due to permissions")
-        sys.exit(0)
-    else:
-        print("WARN: HID present but no readable reports — consider rerunning after exercising device")
-        # Treat as PASS for presence but warn
-        sys.exit(0)
+    # 2) Check for /dev/input/js* devices
+    print(f"Looking for /dev/input/js* for up to {TIMEOUT}s...")
+    js_devices = find_js()
+    if js_devices:
+        print(f"Found js devices: {js_devices}")
+        res = try_open_nonblocking(js_devices[0])
+        if res is True:
+            print("PASS: /dev/input/js* present and readable")
+            sys.exit(0)
+        elif res is None:
+            print("SKIP: Permission denied for /dev/input/js*")
+            sys.exit(0)
+        else:
+            print("WARN: js present but not producing readable data")
+            sys.exit(0)
+
+    # 3) Fallback to hidraw
+    print(f"Looking for /dev/hidraw* for up to {TIMEOUT}s...")
+    hid_devices = find_hidraw()
+    if hid_devices:
+        print(f"Found hidraw devices: {hid_devices}")
+        res = try_open_nonblocking(hid_devices[0])
+        if res is True:
+            print("PASS: hidraw device present and readable")
+            sys.exit(0)
+        elif res is None:
+            print("SKIP: Permission denied for hidraw")
+            sys.exit(0)
+        else:
+            print("WARN: hidraw present but not producing readable data")
+            sys.exit(0)
+
+    print("SKIP: No joystick/hid devices found on host")
+    sys.exit(0)
+
 
 if __name__ == '__main__':
     main()
