@@ -82,10 +82,19 @@ python3 test/test_hid_report.py
 rc_hid=$?
 set -e
 
-echo "Serial tests exit code: ${rc_serial}, HID test exit code: ${rc_hid}"
+echo "Serial tests exit code: ${rc_serial}, HID presence test exit code: ${rc_hid}"
+
+# Run HID exercise test (sends MIDI -> verifies axis changes) if pygame + MIDI available
+echo "Running HID exercise test (pygame + MIDI)..."
+set +e
+python3 test/test_hid_exercise.py
+rc_hid_exercise=$?
+set -e
+
+echo "HID exercise test exit code: ${rc_hid_exercise}"
 
 # Exit non-zero if either test failed
-if [ ${rc_serial} -ne 0 ] || [ ${rc_hid} -ne 0 ]; then
+if [ ${rc_serial} -ne 0 ] || [ ${rc_hid} -ne 0 ] || [ ${rc_hid_exercise} -ne 0 ]; then
   echo "One or more tests failed"
   exit 1
 fi
