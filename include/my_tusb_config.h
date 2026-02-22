@@ -42,16 +42,16 @@
 #define CFG_TUD_ENDPOINT0_SIZE    64
 #endif
 
-// Expose two CDC interfaces (debug + MIDI) and one HID interface
+// Expose one CDC interface (debug), one native MIDI interface and one HID
 #undef CFG_TUD_CDC
-#define CFG_TUD_CDC              (2)
+#define CFG_TUD_CDC              (1)
 
 #undef CFG_TUD_HID
 #define CFG_TUD_HID              (1)
 
-// Keep MIDI device class off (we use CDC for MIDI transport)
+// Enable native MIDI device class (for host MIDI endpoints)
 #undef CFG_TUD_MIDI
-#define CFG_TUD_MIDI             (0)
+#define CFG_TUD_MIDI             (1)
 
 #undef CFG_TUD_MSC
 #define CFG_TUD_MSC              (0)
