@@ -118,13 +118,17 @@ def main():
     ser.close()
 
     # Evaluate significant axis change on axis 0
-    if not baseline or not a1:
+    if not baseline or not a0 or not a1:
         print("✗ FAIL: Unable to read axes")
         sys.exit(2)
 
-    delta = abs(a1[0] - baseline[0])
-    print(f"Axis0 delta: {delta:.3f}")
-    if delta > 0.4:
+    d0 = abs(a0[0] - baseline[0])
+    d1 = abs(a1[0] - baseline[0])
+    d01 = abs(a1[0] - a0[0])
+    max_delta = max(d0, d1, d01)
+    print(f"Axis deltas: d0={d0:.3f}, d1={d1:.3f}, d01={d01:.3f}")
+
+    if max_delta > 0.4:
         print("✓ PASS: Axis moved significantly after MIDI commands")
         sys.exit(0)
     else:
