@@ -13,7 +13,78 @@ import time
 import sys
 import re
 import glob
+import os
 from pathlib import Path
+from serial.tools import list_ports
+
+
+def _parse_vid_pid(val):
+    if val is None:
+        return None
+    try:
+        if isinstance(val, str) and val.lower().startswith("0x"):
+            return int(val, 16)
+        return int(val)
+    except:
+        return None
+
+
+def wait_for_ports(timeout=10, poll_interval=0.5,
+                   debug_vid=None, debug_pid=None, midi_vid=None, midi_pid=None,
+                   debug_manufacturer=None, midi_manufacturer=None):
+    """Wait for serial ports to enumerate and choose debug/midi ports.
+
+    Selection order:
+    1. Match VID/PID if specified
+    2. Match manufacturer substring if specified
+    3. Fallback to the first two ACM/USB ports (ACM0=debug, ACM1=MIDI)
+    """
+    debug_vid = _parse_vid_pid(debug_vid)
+    debug_pid = _parse_vid_pid(debug_pid)
+    midi_vid = _parse_vid_pid(midi_vid)
+    midi_pid = _parse_vid_pid(midi_pid)
+
+    end = time.time() + timeout
+    while time.time() < end:
+        ports = list(list_ports.comports())
+        if ports:
+            # Build lookup
+            debug_port = None
+            midi_port = None
+
+            # Try VID/PID matching
+            for p in ports:
+                if debug_port is None and debug_vid is not None:
+                    if getattr(p, "vid", None) == debug_vid and getattr(p, "pid", None) == debug_pid:
+                        debug_port = p.device
+                if midi_port is None and midi_vid is not None:
+                    if getattr(p, "vid", None) == midi_vid and getattr(p, "pid", None) == midi_pid:
+                        midi_port = p.device
+
+            # Try manufacturer substring
+            for p in ports:
+                man = (p.manufacturer or "").lower()
+                if debug_port is None and debug_manufacturer:
+                    if debug_manufacturer.lower() in man:
+                        debug_port = p.device
+                if midi_port is None and midi_manufacturer:
+                    if midi_manufacturer.lower() in man:
+                        midi_port = p.device
+
+            # Fallback: prefer ACM then USB ordering
+            device_names = [p.device for p in ports if (p.device.startswith("/dev/ttyACM") or p.device.startswith("/dev/ttyUSB"))]
+            if debug_port is None and device_names:
+                debug_port = device_names[0]
+            if midi_port is None and len(device_names) > 1:
+                midi_port = device_names[1]
+            elif midi_port is None and len(device_names) == 1:
+                midi_port = device_names[0]
+
+            return debug_port, midi_port
+
+        time.sleep(poll_interval)
+
+    return None, None
 
 
 class HIDControllerTestSuite:
@@ -23,11 +94,39 @@ class HIDControllerTestSuite:
         """Initialize test suite
         
         Args:
-            debug_port: Serial port for debug output (usually /dev/ttyACM0)
-            midi_port: Serial port for MIDI input (usually /dev/ttyACM1)
+            debug_port: Serial port for debug output (e.g. /dev/ttyACM0)
+            midi_port: Serial port for MIDI input (e.g. /dev/ttyACM1)
         """
-        self.debug_port = debug_port or self._find_port("debug", 115200)
-        self.midi_port = midi_port or self._find_port("midi", 31250)
+        # Allow explicit env overrides
+        env_dbg = os.environ.get("DEBUG_PORT")
+        env_midi = os.environ.get("MIDI_PORT")
+
+        if env_dbg:
+            debug_port = env_dbg
+        if env_midi:
+            midi_port = env_midi
+
+        # If not provided, attempt robust detection
+        if not debug_port or not midi_port:
+            dbg_vid = os.environ.get("DEBUG_VID")
+            dbg_pid = os.environ.get("DEBUG_PID")
+            midi_vid = os.environ.get("MIDI_VID")
+            midi_pid = os.environ.get("MIDI_PID")
+            dbg_man = os.environ.get("DEBUG_MANUFACTURER")
+            midi_man = os.environ.get("MIDI_MANUFACTURER")
+
+            found_dbg, found_midi = wait_for_ports(
+                timeout=int(os.environ.get("PORT_WAIT_TIMEOUT", "10")),
+                debug_vid=dbg_vid, debug_pid=dbg_pid,
+                midi_vid=midi_vid, midi_pid=midi_pid,
+                debug_manufacturer=dbg_man, midi_manufacturer=midi_man
+            )
+
+            debug_port = debug_port or found_dbg
+            midi_port = midi_port or found_midi
+
+        self.debug_port = debug_port
+        self.midi_port = midi_port
         self.debug_ser = None
         self.midi_ser = None
         self.results = []
@@ -35,36 +134,45 @@ class HIDControllerTestSuite:
         
     @staticmethod
     def _find_port(port_type, baudrate):
-        """Find available serial port"""
+        """(Deprecated) Find available serial port fallback"""
         ports = sorted(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*"))
         if not ports:
             return None
-        # Return first port (typically ACM0 for debug, ACM1 for MIDI)
         return ports[0] if port_type == "debug" else (ports[1] if len(ports) > 1 else ports[0])
     
     def connect(self):
         """Connect to both serial ports"""
         try:
+            if not self.debug_port and not self.midi_port:
+                print("✗ No serial ports detected. Connect RP2040 and/or set DEBUG_PORT/MIDI_PORT environment variables.")
+                print("   You can also run test/run_tests.sh which attempts upload and waits for enumeration.")
+                return False
+
             if self.debug_port:
                 self.debug_ser = serial.Serial(self.debug_port, 115200, timeout=2)
                 print(f"✓ Debug serial: {self.debug_port} @ 115200 baud")
+            else:
+                print("⚠ Debug serial not found; some tests may be skipped")
+
             if self.midi_port:
                 self.midi_ser = serial.Serial(self.midi_port, 31250, timeout=2)
                 print(f"✓ MIDI serial: {self.midi_port} @ 31250 baud")
-            
+            else:
+                print("⚠ MIDI serial not found; MIDI tests will be skipped")
+
             time.sleep(2)  # Wait for firmware startup
             return True
         except Exception as e:
             print(f"✗ Connection failed: {e}")
             return False
-    
+
     def close(self):
         """Close serial connections"""
         if self.debug_ser:
             self.debug_ser.close()
         if self.midi_ser:
             self.midi_ser.close()
-    
+
     def read_debug_lines(self, timeout=1.0, max_lines=50):
         """Read lines from debug serial port"""
         if not self.debug_ser:
@@ -83,7 +191,7 @@ class HIDControllerTestSuite:
                 time.sleep(0.01)
         
         return lines
-    
+
     def send_midi_cc(self, cc_num, cc_val):
         """Send MIDI CC message"""
         if not self.midi_ser:
@@ -97,7 +205,7 @@ class HIDControllerTestSuite:
             return True
         except:
             return False
-    
+
     def test_system_identification(self):
         """Test 1: System Connectivity - verify device responds to commands"""
         print("\n" + "=" * 70)
@@ -135,7 +243,7 @@ class HIDControllerTestSuite:
             print("\n✗ FAIL: Device not responding (no debug output)")
             self.results.append(("System Connectivity", False, "No response"))
             return False
-    
+
     def test_motor_initial_position(self):
         """Test 2: Verify motor position at startup"""
         print("\n" + "=" * 70)
@@ -148,7 +256,7 @@ class HIDControllerTestSuite:
         initial_angle = None
         for line in lines:
             # Look for "Angle: X.XXXX rad"
-            match = re.search(r'Angle:\s+([-\d.]+)\s+rad', line)
+            match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
             if match:
                 initial_angle = float(match.group(1))
                 break
@@ -168,7 +276,7 @@ class HIDControllerTestSuite:
             print("✗ FAIL: Could not read motor angle")
             self.results.append(("Motor Initial Position", False, "Angle not readable"))
             return False
-    
+
     def test_motor_response_to_midi(self):
         """Test 3: Send MIDI command, verify motor moves"""
         print("\n" + "=" * 70)
@@ -199,7 +307,7 @@ class HIDControllerTestSuite:
         for line in lines:
             if "MIDI:" in line and "CC#64" in line:
                 motor_moved = True
-            match = re.search(r'Angle:\s+([-\d.]+)\s+rad', line)
+            match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
             if match:
                 final_angle = float(match.group(1))
         
@@ -214,7 +322,7 @@ class HIDControllerTestSuite:
             print(f"\n✗ FAIL: Motor did not respond to MIDI")
             self.results.append(("Motor Response to MIDI", False, "No MIDI response logged"))
             return False
-    
+
     def test_joystick_scaling(self):
         """Test 4: Verify joystick values scale with motor position"""
         print("\n" + "=" * 70)
@@ -249,7 +357,7 @@ class HIDControllerTestSuite:
             print("⚠ SKIP: No joystick values found in debug output")
             self.results.append(("Joystick Scaling", None, "Values not readable"))
             return None
-    
+
     def test_motor_sweep(self):
         """Test 5: Send MIDI sweep, verify smooth joystick output"""
         print("\n" + "=" * 70)
@@ -271,7 +379,7 @@ class HIDControllerTestSuite:
             # Read the angle
             lines = self.read_debug_lines(timeout=0.5)
             for line in lines:
-                match = re.search(r'Angle:\s+([-\d.]+)\s+rad', line)
+                match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
                 if match:
                     angle = float(match.group(1))
                     positions.append((cc_val, angle))
@@ -296,7 +404,7 @@ class HIDControllerTestSuite:
             print("✗ FAIL: Could not read angles during sweep")
             self.results.append(("Motor Sweep", False, "Angles not readable"))
             return False
-    
+
     def print_results(self):
         """Print test results summary"""
         print("\n" + "=" * 70)
@@ -323,7 +431,7 @@ class HIDControllerTestSuite:
         print("=" * 70)
         
         return failed == 0
-    
+
     def run_all(self):
         """Run all tests"""
         print("\n" + "=" * 70)
