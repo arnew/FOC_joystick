@@ -219,13 +219,29 @@ class HIDControllerTestSuite:
         
         print("Checking device responsiveness...")
         
-        # Send a simple MIDI command to trigger a response
+        # Send a simple MIDI command to trigger a response (try a couple times)
+        lines = []
         if self.midi_ser:
             self.send_midi_cc(64, 0)  # CC#64=0 to trigger debug output
-            time.sleep(0.5)
-        
-        # Read debug output to verify device is responding
-        lines = self.read_debug_lines(timeout=1.0, max_lines=20)
+            time.sleep(0.2)
+
+            # Read for up to 2s, re-sending once if needed
+            start = time.time()
+            resent = False
+            while time.time() - start < 2.0:
+                new_lines = self.read_debug_lines(timeout=0.25, max_lines=10)
+                if new_lines:
+                    lines.extend(new_lines)
+                if any(("Angle:" in l and "rad" in l) for l in lines):
+                    break
+                if not resent and time.time() - start > 0.6:
+                    # retry MIDI ping
+                    self.send_midi_cc(64, 0)
+                    resent = True
+                time.sleep(0.05)
+        else:
+            # Read debug output to verify device is responding
+            lines = self.read_debug_lines(timeout=1.0, max_lines=20)
         
         # Check for valid debug output format
         valid_response = False
