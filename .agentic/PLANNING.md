@@ -8,6 +8,29 @@ This document outlines the complete implementation strategy for a USB HID joysti
 
 ---
 
+## Current Status (2026-02-22)
+
+- Build: Successful for `pico_1motor_endless` and `pico_twocdc_test` environments.
+- Dual USB CDC: Enabled and working (`-DCFG_TUD_CDC=2`, `usb_cdc_midi` instance) — host shows ACM0 (debug) and ACM1 (MIDI).
+- MIDI input: 3-byte MIDI CC parsing implemented; `usb_cdc_midi` read integrated into `loop()`.
+- Motor control: `motor0` FOC loop stable; angle sensing via AS5600 validated.
+- Test suite: `test/test_suite_automated.py` implemented and passes on connected hardware (5/5 tests when device running firmware).
+
+## Progress Summary
+
+- Completed:
+  - Phase 1: Configuration system
+  - Phase 2: Motor controller abstraction (Motor0 fully working)
+  - Phase 3: MIDI input handler (dual-CDC + 3-byte parser)
+  - Phase 4: Axis output scaling (0-1023 mapping)
+  - Test harness and debug tools
+
+- In progress / TODO:
+  - Phase 5: USB HID joystick: descriptor exists as a stub; implementation of actual HID report send is remaining and must be validated on host (MSFS).
+  - Motor 1: wiring and configuration need finalization and verification on hardware (pico_2motor_limited env).
+  - Remove legacy text-demultiplexing code paths and cleanup unused helpers.
+  - Prepare release branch and update CHANGELOG after HID verification.
+
 ## Requirements Specification
 
 ### Hardware Configuration

@@ -28,6 +28,7 @@
 // CDC instance for MIDI input (CDC#1)
 // Note: Serial is automatically CDC#0 via Arduino framework
 Adafruit_USBD_CDC usb_cdc_midi;
+// HID device (USB)
 Adafruit_USBD_HID usb_hid;
 
 // ============================================================================
@@ -276,43 +277,34 @@ typedef struct {
 
 hid_joystick_report_t current_report = {512, 512};
 
-// Simple 2-axis 16-bit joystick HID report descriptor
-const uint8_t joystick_hid_report_descriptor[] = {
-  0x05, 0x01,       // Usage Page (Generic Desktop)
-  0x09, 0x04,       // Usage (Joystick)
-  0xA1, 0x01,       // Collection (Application)
-
-    // Buttons (8 bits)
-    0x05, 0x09,     //   Usage Page (Button)
-    0x19, 0x01,     //   Usage Minimum (Button 1)
-    0x29, 0x08,     //   Usage Maximum (Button 8)
-    0x15, 0x00,     //   Logical Minimum (0)
-    0x25, 0x01,     //   Logical Maximum (1)
-    0x75, 0x01,     //   Report Size (1)
-    0x95, 0x08,     //   Report Count (8)
-    0x81, 0x02,     //   Input (Data,Var,Abs)
-
-    // Axes X and Y (16-bit each)
-    0x05, 0x01,     //   Usage Page (Generic Desktop)
-    0x09, 0x30,     //   Usage (X)
-    0x09, 0x31,     //   Usage (Y)
-    0x15, 0x00,     //   Logical Minimum (0)
-    0x26, 0xFF, 0x03, // Logical Maximum (1023)
-    0x75, 0x10,     //   Report Size (16)
-    0x95, 0x02,     //   Report Count (2)
-    0x81, 0x02,     //   Input (Data,Var,Abs)
-
-  0xC0              // End Collection
-};
-
 /**
  * Initialize USB HID Joystick
  * TODO: Implement with proper TinyUSB or RP2040 USB library
  */
 void setup_usb_hid() {
-  // Initialize HID device with joystick descriptor
-  usb_hid.setReportDescriptor(joystick_hid_report_descriptor, sizeof(joystick_hid_report_descriptor));
+  // Define a simple HID report descriptor: 2 axes, 16-bit each (0..1023)
+  static const uint8_t hid_report_descriptor[] = {
+    0x05, 0x01,       // Usage Page (Generic Desktop)
+    0x09, 0x04,       // Usage (Joystick)
+    0xA1, 0x01,       // Collection (Application)
+    0x09, 0x01,       //   Usage (Pointer)
+    0xA1, 0x00,       //   Collection (Physical)
+    0x05, 0x01,       //     Usage Page (Generic Desktop)
+    0x09, 0x30,       //     Usage (X)
+    0x09, 0x31,       //     Usage (Y)
+    0x15, 0x00,       //     Logical Minimum (0)
+    0x26, 0xFF, 0x03, //     Logical Maximum (1023)
+    0x75, 0x10,       //     Report Size (16)
+    0x95, 0x02,       //     Report Count (2)
+    0x81, 0x02,       //     Input (Data,Var,Abs)
+    0xC0,             //   End Collection
+    0xC0              // End Collection
+  };
+
+  // Register descriptor and start HID
+  usb_hid.setReportDescriptor(hid_report_descriptor, sizeof(hid_report_descriptor));
   usb_hid.begin();
+
   Serial.println("USB HID initialized");
 }
 
@@ -321,11 +313,13 @@ void setup_usb_hid() {
  * TODO: Implement actual HID report transmission
  */
 void send_hid_report() {
+  // Only send if values changed
   if (axis_values[0] != current_report.x || axis_values[1] != current_report.y) {
     current_report.x = axis_values[0];
     current_report.y = axis_values[1];
-    // Send HID report on interface 0
+
     if (usb_hid.ready()) {
+      // report id 0, send raw packed report
       usb_hid.sendReport(0, &current_report, sizeof(current_report));
     }
   }
