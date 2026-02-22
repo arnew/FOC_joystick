@@ -17,6 +17,10 @@ import os
 from pathlib import Path
 from serial.tools import list_ports
 
+# Import high-speed monitor
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from motor_monitor import HighSpeedMonitor
+
 try:
     import pygame.midi
     PYGAME_MIDI_AVAILABLE = True
@@ -439,7 +443,7 @@ class HIDControllerTestSuite:
             return None
 
     def test_motor_sweep(self):
-        """Test 5: Send MIDI sweep, verify smooth joystick output"""
+        """Test 5: Send MIDI sweep, verify monotonic angle increase"""
         print("\n" + "=" * 70)
         print("TEST 5: Motor Sweep & Joystick Output")
         print("=" * 70)
@@ -467,23 +471,71 @@ class HIDControllerTestSuite:
                     print(f"  CC#64={cc_val:3d} → Angle={angle:7.4f} rad ({angle_deg:6.1f}°)")
                     break
         
-        if len(positions) >= 3:
-            # Check that angles increase
-            angles = [p[1] for p in positions]
-            increasing = all(angles[i] <= angles[i+1] for i in range(len(angles)-1))
-            
-            if increasing:
-                print("✓ PASS: Motor sweeps smoothly with MIDI")
-                self.results.append(("Motor Sweep", True, None))
-                return True
-            else:
-                print("⚠ WARNING: Angles not monotonically increasing")
-                self.results.append(("Motor Sweep", True, "Non-monotonic motion"))
-                return True
-        else:
-            print("✗ FAIL: Could not read angles during sweep")
+        if len(positions) < 3:
+            print("✗ FAIL: Could not read sufficient angles during sweep")
             self.results.append(("Motor Sweep", False, "Angles not readable"))
             return False
+        
+        # Strict validation: angles MUST increase monotonically
+        angles = [p[1] for p in positions]
+        increasing = all(angles[i] <= angles[i+1] for i in range(len(angles)-1))
+        
+        if increasing:
+            print("✓ PASS: Motor sweeps smoothly and monotonically")
+            self.results.append(("Motor Sweep", True, None))
+            return True
+        else:
+            # FAIL: Non-monotonic motion indicates control problem
+            print("✗ FAIL: Angles not monotonically increasing")
+            print(f"  Expected: angles increase with CC value")
+            print(f"  Got: {angles}")
+            self.results.append(("Motor Sweep", False, "Non-monotonic motion"))
+            return False
+
+    def test_motor_dynamics_highspeed(self):
+        """Test 5b (Optional): High-speed motor dynamics capture (100+ Hz)
+        
+        Uses HighSpeedMonitor to capture motor position and velocity at fast rate.
+        Useful for detailed tuning and diagnostics.
+        """
+        if not self.debug_ser:
+            print("⊘ SKIP: Debug serial not available for high-speed monitoring")
+            return None
+        
+        print("\n" + "=" * 70)
+        print("TEST 5B: High-Speed Motor Dynamics (Optional)")
+        print("=" * 70)
+        
+        if not self.midi_output and not self.midi_ser:
+            print("⊘ SKIP: MIDI port not available")
+            return None
+        
+        try:
+            print("Monitoring motor dynamics at 100+ Hz for 5 seconds...")
+            monitor = HighSpeedMonitor(self.debug_ser)
+            
+            samples = monitor.collect_samples(duration=5.0, target_hz=100)
+            
+            if len(samples) < 5:
+                print(f"⊘ SKIP: Only {len(samples)} samples collected (need 5+)")
+                return None
+            
+            stats = monitor.get_stats()
+            if stats:
+                print(f"\n✓ Collected {stats['count']} samples over {stats['duration']:.2f}s")
+                print(f"  Sample rate: {stats['sample_rate']:.1f} Hz")
+                print(f"  Angle range: {stats['angle_min']:.4f} → {stats['angle_max']:.4f} rad")
+                print(f"  Velocity: avg={stats['velocity_mean']:.4f}, max={stats['velocity_max']:.4f} rad/s")
+                
+                self.results.append(("Motor Dynamics", True, f"{stats['sample_rate']:.0f} Hz"))
+                return True
+            else:
+                print("✓ High-speed monitor collected data")
+                self.results.append(("Motor Dynamics", True, None))
+                return True
+        except Exception as e:
+            print(f"⚠ High-speed monitoring error: {e}")
+            return None
 
     def print_results(self):
         """Print test results summary"""
@@ -529,6 +581,7 @@ class HIDControllerTestSuite:
             self.test_motor_response_to_midi()
             self.test_joystick_scaling()
             self.test_motor_sweep()
+            self.test_motor_dynamics_highspeed()  # Optional high-speed monitor
             
             # Print summary
             all_pass = self.print_results()
