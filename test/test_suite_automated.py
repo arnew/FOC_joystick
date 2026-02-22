@@ -270,12 +270,20 @@ class HIDControllerTestSuite:
         
         print("Checking device responsiveness...")
         
-        # Send a simple MIDI command to trigger a response (try a couple times)
+        # Send a MIDI command to trigger motor response and debug output
         lines = []
-        if self.midi_ser:
-            self.send_midi_cc(64, 0)  # CC#64=0 to trigger debug output
+        midi_sent = False
+        if self.midi_output:
+            # Use native USB MIDI to trigger motor response
+            try:
+                self.send_midi_cc(64, 0)  # CC#64=0 to trigger debug output
+                midi_sent = True
+            except:
+                pass
+        
+        if midi_sent or self.midi_ser:
+            # With MIDI, we can trigger response
             time.sleep(0.2)
-
             # Read for up to 2s, re-sending once if needed
             start = time.time()
             resent = False
@@ -287,12 +295,17 @@ class HIDControllerTestSuite:
                     break
                 if not resent and time.time() - start > 0.6:
                     # retry MIDI ping
-                    self.send_midi_cc(64, 0)
+                    if self.midi_output:
+                        try:
+                            self.send_midi_cc(64, 0)
+                        except:
+                            pass
                     resent = True
                 time.sleep(0.05)
         else:
-            # Read debug output to verify device is responding
-            lines = self.read_debug_lines(timeout=1.0, max_lines=20)
+            # No MIDI, wait for natural ~1Hz debug output
+            time.sleep(0.5)  # Wait for next message after connection
+            lines = self.read_debug_lines(timeout=2.0, max_lines=20)
         
         # Check for valid debug output format
         valid_response = False
@@ -350,7 +363,7 @@ class HIDControllerTestSuite:
         print("TEST 3: Motor Response to MIDI (Close-Loop)")
         print("=" * 70)
         
-        if not self.midi_ser:
+        if not self.midi_output and not self.midi_ser:
             print("✗ SKIP: MIDI port not available")
             self.results.append(("Motor Response to MIDI", None, "MIDI port unavailable"))
             return None
@@ -431,7 +444,7 @@ class HIDControllerTestSuite:
         print("TEST 5: Motor Sweep & Joystick Output")
         print("=" * 70)
         
-        if not self.midi_ser:
+        if not self.midi_output and not self.midi_ser:
             print("✗ SKIP: MIDI port not available")
             self.results.append(("Motor Sweep", None, "MIDI port unavailable"))
             return None
