@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include <SimpleFOC.h>
 #include "config.h"
+#include "pid_config.h"
 #include "Adafruit_TinyUSB.h"
 
 // ============================================================================
@@ -368,14 +369,33 @@ void setup() {
   sensor0.init();
   motor0.linkSensor(&sensor0);
   
+  // Angle/position control loop
   motor0.controller = MotionControlType::angle;
-  motor0.voltage_limit = 2.0f;
-  motor0.PID_velocity.P *= 0.25f;
-  motor0.LPF_angle.Tf = 0.01f;
+  motor0.voltage_limit = MOTOR0_VOLTAGE_LIMIT;
+  
+  // PID gains from pid_config.h (SimpleFOC angle controller)
+  // Note: SimpleFOC uses P, I, D directly for angle control via voltage command
+  motor0.P_angle.P = MOTOR0_PID_P;
+  motor0.P_angle.I = MOTOR0_PID_I;
+  motor0.P_angle.D = MOTOR0_PID_D;
+  
+  // Velocity loop gains (used internally by SimpleFOC for smooth motion)
+  motor0.PID_velocity.P = MOTOR0_VELOCITY_P;
+  motor0.PID_velocity.I = MOTOR0_VELOCITY_I;
+  motor0.PID_velocity.D = MOTOR0_VELOCITY_D;
+  
+  // Low-pass filter to smooth sensor readings
+  motor0.LPF_angle.Tf = MOTOR0_LPF_ANGLE_TF;
   
   motor0.init();
   motor0.initFOC();
-  Serial.println("Motor 0 initialized");
+  
+  Serial.print("Motor 0 initialized with PID: Kp=");
+  Serial.print(MOTOR0_PID_P);
+  Serial.print(" Ki=");
+  Serial.print(MOTOR0_PID_I);
+  Serial.print(" Kd=");
+  Serial.println(MOTOR0_PID_D);
   
   // ===== Motor 0 Setup (continued) =====
   
