@@ -24,6 +24,10 @@ import serial
 from serial.tools import list_ports
 import struct
 
+# Import high-speed monitor for better dynamics capture
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from motor_monitor import HighSpeedMonitor
+
 try:
     import pygame.midi
     PYGAME_MIDI_AVAILABLE = True
@@ -152,6 +156,34 @@ class PIDCalibrator:
                     pass
             time.sleep(0.01)  # 10 ms granularity
         return lines
+    
+    def capture_dynamics_highspeed(self, duration=3.0):
+        """
+        Capture motor dynamics at high speed using HighSpeedMonitor
+        
+        Returns:
+            dict: {velocity_mean, velocity_max, sample_rate} or None if failed
+        """
+        if not self.debug_ser:
+            return None
+        
+        try:
+            monitor = HighSpeedMonitor(self.debug_ser)
+            samples = monitor.collect_samples(duration=duration, target_hz=100)
+            
+            if len(samples) < 3:
+                return None
+            
+            stats = monitor.get_stats()
+            if self.debug:
+                print(f"  ✓ High-speed capture: {len(samples)} samples @ {stats['sample_rate']:.1f} Hz")
+                print(f"    Velocity: {stats['velocity_mean']:.4f} rad/s (avg), {stats['velocity_max']:.4f} rad/s (max)")
+            
+            return stats
+        except Exception as e:
+            if self.debug:
+                print(f"  ⚠ High-speed monitor error: {e}")
+            return None
     
     def send_midi_cc(self, cc_num, cc_val):
         """Send MIDI CC via persistent pygame.midi connection"""
@@ -570,13 +602,22 @@ class PIDCalibrator:
         print(f"  Overshoot: {overshoot:.1f}%")
         print(f"  Settling Time (2%): {settling_time:.2f}s")
         
+        # Optional: Capture high-speed dynamics for velocity controller analysis
+        print("\n  Monitoring velocity response for controller tuning...")
+        vel_stats = self.capture_dynamics_highspeed(duration=2.0)
+        if vel_stats:
+            print(f"  Velocity controller analysis:")
+            print(f"    Measured velocity: {vel_stats['velocity_max']:.4f} rad/s (peak)")
+            print(f"    Sample rate: {vel_stats['sample_rate']:.1f} Hz")
+        
         return {
             'baseline': baseline,
             'final': final,
             'peak': peak,
             'overshoot': overshoot,
             'settling_time': settling_time,
-            'samples': len(samples)
+            'samples': len(samples),
+            'velocity_stats': vel_stats
         }
     
     def run_full_calibration(self):
@@ -666,6 +707,7 @@ def main():
     parser.add_argument('--ramp-only', action='store_true', help='[Phase 1] Ramp test only (sanity check + limit detection)')
     parser.add_argument('--relay-only', action='store_true', help='[Phase 2] Relay test only (skip ramp check)')
     parser.add_argument('--step-only', action='store_true', help='[Phase 3] Step response only')
+    parser.add_argument('--monitor-only', action='store_true', help='Capture motor dynamics at high speed (no tuning)')
     
     args = parser.parse_args()
     
@@ -700,6 +742,18 @@ def main():
             if step_result:
                 print("\n✓ Step response test complete")
             else:
+                sys.exit(1)
+        elif args.monitor_only:
+            print("\nCapturing high-speed motor dynamics for 5 seconds...")
+            vel_stats = calibrator.capture_dynamics_highspeed(duration=5.0)
+            if vel_stats:
+                print(f"\n✓ Motor Dynamics Summary:")
+                print(f"  Sample rate: {vel_stats['sample_rate']:.1f} Hz")
+                print(f"  Angle range: {vel_stats['angle_min']:.4f} → {vel_stats['angle_max']:.4f} rad")
+                print(f"  Velocity: {vel_stats['velocity_mean']:.4f} rad/s (avg), {vel_stats['velocity_max']:.4f} rad/s (max)")
+                print(f"  Duration: {vel_stats['duration']:.2f}s")
+            else:
+                print("✗ No dynamics data collected")
                 sys.exit(1)
         else:
             success = calibrator.run_full_calibration()
