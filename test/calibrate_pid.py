@@ -517,10 +517,15 @@ class PIDCalibrator:
         
         return True  # Endless
     
-    def step_response_test(self, step_size=45.0, settle_time=3.0):
+    def step_response_test(self, step_size=90.0, settle_time=3.0, baseline_cc=64):
         """
         Perform step response test with high-speed monitoring: measure rise time, overshoot, settling time
         AND evaluate tuning quality (steady-state stability, noise, drift)
+        
+        Args:
+            step_size: Step size in degrees (default 90°)
+            settle_time: Time to monitor settling in seconds (default 3s)
+            baseline_cc: Starting MIDI CC value (0-127, default 64=middle)
         
         Returns:
             dict: {rise_time, overshoot, settling_time, peak, tuning_quality_score, ...}
@@ -538,8 +543,8 @@ class PIDCalibrator:
         monitor = HighSpeedMonitor(self.debug_ser)
         
         # Give steady state baseline
-        print("1. Sending step input (0° → baseline)...")
-        self.send_midi_cc(64, 50)  # ~50° baseline
+        print("1. Sending step input (baseline)...")
+        self.send_midi_cc(64, baseline_cc)
         time.sleep(1.0)
         
         # Read baseline (collect 50ms worth of samples)
@@ -552,11 +557,12 @@ class PIDCalibrator:
             time.sleep(0.005)
         
         baseline = sum(baseline_samples) / len(baseline_samples) if baseline_samples else 0
-        print(f"   Baseline angle: {baseline:.3f} rad ({baseline*180/3.14159:.1f}°)")
+        print(f"   Baseline angle: {baseline:.3f} rad ({baseline*180/3.14159:.1f}°) [from CC={baseline_cc}]")
         
         # Send step
         print("2. Sending step to target...")
-        step_cc = int(50 + (step_size / 180) * 127)  # Convert angle to CC value
+        step_cc = int(baseline_cc + (step_size / 180) * 127)  # Convert angle to CC value from baseline
+        step_cc = max(0, min(127, step_cc))  # Clamp to valid MIDI range
         self.send_midi_cc(64, step_cc)
         
         # Collect response with high-speed monitoring
@@ -874,7 +880,7 @@ class PIDCalibrator:
         # 2. Step response test (to validate tuning)
         time.sleep(1.0)
         print(f"\n[Phase 3/4] Step Response Validation")
-        step_result = self.step_response_test(step_size=45.0, settle_time=2.0)
+        step_result = self.step_response_test(step_size=90.0, settle_time=2.0)
         
         # Summary with both controller gains
         print("\n" + "="*70)
@@ -946,6 +952,8 @@ def find_debug_port():
 def main():
     parser = argparse.ArgumentParser(description='SimpleFOC Dual-Loop PID Calibration (Angle + Velocity)')
     parser.add_argument('--motor', type=int, default=0, help='Motor ID (0 or 1)')
+    parser.add_argument('--step-size', type=float, default=90.0, help='Step size in degrees (default 90°)')
+    parser.add_argument('--baseline-cc', type=int, default=64, help='Starting MIDI CC value for step test (0-127, default 64=middle)')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--ramp-only', action='store_true', help='[Phase 1] Ramp test only')
     parser.add_argument('--velocity-only', action='store_true', help='[Phase 2a] Velocity controller relay test only')
@@ -1000,7 +1008,7 @@ def main():
             print("⚠ --relay-only is deprecated, use --velocity-only and --angle-only")
             sys.exit(1)
         elif args.step_only:
-            step_result = calibrator.step_response_test()
+            step_result = calibrator.step_response_test(step_size=args.step_size, baseline_cc=args.baseline_cc)
             if step_result:
                 print("\n✓ Step response test complete")
             else:
