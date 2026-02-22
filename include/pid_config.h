@@ -16,33 +16,41 @@
  */
 
 // Motor 0 PID Gains (Angle Controller)
-// Initial values tuned for RP2040 mini + AS5600 + 7-pole motor
-#define MOTOR0_PID_P  2.5f   // Proportional gain (was unlabeled, ~default SimpleFOC)
-#define MOTOR0_PID_I  0.0f   // Integral gain (angular position, usually minimal)
-#define MOTOR0_PID_D  0.5f   // Derivative gain (damping, reduces oscillation)
+// Based on SimpleFOC defaults.h for RP2040 (non-AVR controller)
+// DEF_P_ANGLE_P = 20.0f (SimpleFOC default angle P controller)
+#define MOTOR0_PID_P  20.0f   // Proportional gain (SimpleFOC default for angle control)
+#define MOTOR0_PID_I  0.0f    // Integral gain (angular position, usually minimal)
+#define MOTOR0_PID_D  0.5f    // Derivative gain (damping, reduces oscillation)
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
-#define MOTOR0_VELOCITY_P  0.02f  // Lower P for velocity loop
-#define MOTOR0_VELOCITY_I  0.0f
-#define MOTOR0_VELOCITY_D  0.0f
+// Based on SimpleFOC defaults: DEF_PID_VEL_P=0.5f, DEF_PID_VEL_I=10.0f, DEF_PID_VEL_D=0.0f
+#define MOTOR0_VELOCITY_P  0.5f   // P for velocity loop (SimpleFOC default)
+#define MOTOR0_VELOCITY_I  10.0f  // I for velocity loop (SimpleFOC default, reduces steady-state error)
+#define MOTOR0_VELOCITY_D  0.0f   // D for velocity loop
 
 // Motor 0 Voltage & Current Limits
 #define MOTOR0_VOLTAGE_LIMIT  2.0f     // Maximum voltage applied (0-12V)
-#define MOTOR0_CURRENT_LIMIT  2.0f     // Maximum current from sensor (optional)
+#define MOTOR0_CURRENT_LIMIT  2.0f     // Maximum current from sensor (optional, SimpleFOC DEF_CURRENT_LIM=2.0f)
 #define MOTOR0_ACCELERATION   10.0f    // Max rad/s² (optional soft-start)
 
 // Low-Pass Filter for angle measurement
+// SimpleFOC DEF_VEL_FILTER_Tf = 0.005f (5ms velocity filter)
 // Tf = time constant (larger = smoother but slower response)
-#define MOTOR0_LPF_ANGLE_TF  0.01f    // 10ms filter
+#define MOTOR0_LPF_ANGLE_TF  0.005f    // 5ms filter (SimpleFOC default velocity filter)
 
 // Motor 1 PID Gains (if enabled)
 #if NUM_MOTORS > 1
-  #define MOTOR1_PID_P  2.5f
+  #define MOTOR1_PID_P  20.0f   // SimpleFOC default
   #define MOTOR1_PID_I  0.0f
   #define MOTOR1_PID_D  0.5f
   
+  #define MOTOR1_VELOCITY_P  0.5f
+  #define MOTOR1_VELOCITY_I  10.0f
+  #define MOTOR1_VELOCITY_D  0.0f
+  
   #define MOTOR1_VOLTAGE_LIMIT  2.0f
-  #define MOTOR1_LPF_ANGLE_TF  0.01f
+  #define MOTOR1_CURRENT_LIMIT  2.0f
+  #define MOTOR1_LPF_ANGLE_TF  0.005f
 #endif
 
 // ============================================================================
