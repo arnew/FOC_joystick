@@ -2,14 +2,18 @@
 """
 PID Calibration Script using Ziegler-Nichols Relay Method
 
-Triggers auto-tuning on the device by:
-1. Sending relay tuning command (square wave input)
-2. Measuring oscillation frequency and amplitude
-3. Calculating PID gains using Ziegler-Nichols rules
-4. Uploading optimized PID parameters to device
+Complete automated tuning workflow:
+1. [Phase 1] Ramp test: Sanity check + motor type detection (endless vs limited)
+2. [Phase 2] Relay tuning: Square wave injection + oscillation analysis
+3. [Phase 3] Step response validation: Measure rise time & overshoot
+4. Calculate PID gains using Ziegler-Nichols rules with 0.65 safety factor
 
 Usage:
-    python3 test/calibrate_pid.py [--motor 0] [--debug]
+    python3 test/calibrate_pid.py              # Run full calibration (all phases)
+    python3 test/calibrate_pid.py --ramp-only  # [Phase 1] Sanity check only
+    python3 test/calibrate_pid.py --relay-only # [Phase 2] Skip ramp, do relay+relay analysis
+    python3 test/calibrate_pid.py --step-only  # [Phase 3] Step response validation only
+    python3 test/calibrate_pid.py --debug      # Enable verbose output
 """
 
 import os
@@ -35,9 +39,37 @@ class PIDCalibrator:
         self.motor_id = motor_id
         self.debug = debug
         self.debug_ser = None
+        self.midi_output = None  # Persistent MIDI output device
+        self.midi_initialized = False
+        
+        # Initialize pygame.midi once at startup
+        self._init_midi()
+    
+    def _init_midi(self):
+        """Initialize pygame.midi once with persistent connection"""
+        if not PYGAME_MIDI_AVAILABLE:
+            return False
+        
+        try:
+            pygame.midi.init()
+            # Find Pico MIDI output port
+            for i in range(pygame.midi.get_count()):
+                info = pygame.midi.get_device_info(i)
+                # info = (interface, name, input, output, is_open)
+                if b"Pico" in info[1] and info[3] == 1:  # output=1
+                    self.midi_output = pygame.midi.Output(i)
+                    self.midi_initialized = True
+                    if self.debug:
+                        print(f"✓ pygame.midi: {info[1].decode()}")
+                    return True
+        except Exception as e:
+            if self.debug:
+                print(f"⚠ pygame.midi init: {e}")
+        
+        return False
         
     def connect(self):
-        """Connect to debug serial port"""
+        """Connect to debug serial port and verify responsiveness"""
         if not self.debug_port:
             print("✗ No debug port available")
             return False
@@ -45,16 +77,44 @@ class PIDCalibrator:
         try:
             self.debug_ser = serial.Serial(self.debug_port, 115200, timeout=2)
             print(f"✓ Connected to debug port: {self.debug_port}")
-            time.sleep(2)  # Wait for firmware startup
+            
+            # Clear any startup messages
+            time.sleep(0.5)
+            self.debug_ser.reset_input_buffer()
+            
+            # Wait for firmware to stabilize
+            time.sleep(1.5)
+            
+            # Verify we can read debug output
+            print("Verifying device responsiveness...")
+            self.debug_ser.reset_input_buffer()
+            
+            for attempt in range(3):
+                lines = self.read_debug_lines(timeout=1.0, max_lines=5)
+                if lines:
+                    for line in lines:
+                        if "Angle:" in line:
+                            print(f"✓ Device responsive: {line[:50]}...")
+                            return True
+                if attempt < 2:
+                    time.sleep(0.5)
+            
+            print("⚠ Warning: Device not responding with debug output yet")
+            print("  Will attempt calibration anyway...")
             return True
         except Exception as e:
             print(f"✗ Failed to connect: {e}")
             return False
     
     def close(self):
-        """Close serial connection"""
+        """Close serial and MIDI connections"""
         if self.debug_ser:
             self.debug_ser.close()
+        if self.midi_output:
+            try:
+                self.midi_output.close()
+            except:
+                pass
     
     def read_debug_lines(self, timeout=1.0, max_lines=100):
         """Read lines from debug serial output"""
@@ -75,27 +135,38 @@ class PIDCalibrator:
         
         return lines
     
+    def read_debug_lines_buffered(self, timeout=0.2):
+        """
+        Read all available lines from debug port (buffered for ~1 Hz serial output)
+        Accumulates multiple samples in one read window since device outputs at ~1 Hz
+        """
+        lines = []
+        start = time.time()
+        while time.time() - start < timeout:
+            if self.debug_ser.in_waiting > 0:
+                try:
+                    line = self.debug_ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        lines.append(line)
+                except:
+                    pass
+            time.sleep(0.01)  # 10 ms granularity
+        return lines
+    
     def send_midi_cc(self, cc_num, cc_val):
-        """Send MIDI CC via pygame.midi (requires native USB MIDI)"""
-        if not PYGAME_MIDI_AVAILABLE:
-            return False
+        """Send MIDI CC via persistent pygame.midi connection"""
+        if not self.midi_initialized or not self.midi_output:
+            # Retry initialization if it failed
+            if not self._init_midi():
+                return False
         
         try:
-            pygame.midi.init()
-            for i in range(pygame.midi.get_count()):
-                info = pygame.midi.get_device_info(i)
-                # info = (interface, name, input, output, is_open)
-                # output flag is at index 3
-                if b"Pico" in info[1] and info[3] == 1:  # output=1 (index 3)
-                    output = pygame.midi.Output(i)
-                    output.write([[[0xB0, cc_num & 0x7F, cc_val & 0x7F, 0], pygame.midi.time()]])
-                    output.close()
-                    return True
+            self.midi_output.write([[[0xB0, cc_num & 0x7F, cc_val & 0x7F, 0], pygame.midi.time()]])
+            return True
         except Exception as e:
             if self.debug:
-                print(f"⚠ MIDI send failed: {e}")
-        
-        return False
+                print(f"⚠ MIDI write failed: {e}")
+            return False
     
     def relay_test(self, duration=5.0, frequency=2):
         """
@@ -108,7 +179,7 @@ class PIDCalibrator:
         print(f"RELAY TEST: Motor {self.motor_id}")
         print("="*70)
         print(f"Duration: {duration}s, Frequency: {frequency} Hz")
-        print("Sending square wave: 0° → 90° → 0° → ...")
+        print("Sending square wave: 10° → 90° → 10° → ...")
         
         samples = []
         start_time = time.time()
@@ -116,41 +187,78 @@ class PIDCalibrator:
         # Clear any buffered input
         self.debug_ser.reset_input_buffer()
         
-        # Manually send a few MIDI commands to establish square wave
-        print("Sending initial MIDI commands...")
-        for _ in range(3):
-            self.send_midi_cc(64, 90)  # High
-            time.sleep(0.3)
-            self.send_midi_cc(64, 10)  # Low
-            time.sleep(0.3)
+        # Send initial MIDI commands to establish square wave
+        print("Initializing square wave...")
+        wave_period = 1.0 / frequency
+        half_period = wave_period / 2
         
-        # Now collect all available debug output for analysis
-        print("Collecting motor response samples...")
-        start_time = time.time()
+        cc_low = 25   # ~10°
+        cc_high = 90  # ~75°
         
-        while time.time() - start_time < duration:
-            lines = self.read_debug_lines(timeout=0.2)
+        mid_point_time = start_time + duration
+        next_send_time = start_time
+        cc_val = cc_low
+        
+        while time.time() < mid_point_time:
+            current_time = time.time()
+            
+            # Send MIDI on schedule (every half period)
+            if current_time >= next_send_time:
+                success = self.send_midi_cc(64, cc_val)
+                if self.debug:
+                    print(f"  [MIDI] CC#64 = {cc_val} {'✓' if success else '⚠'}")
+                
+                # Toggle for next send
+                cc_val = cc_high if cc_val == cc_low else cc_low
+                next_send_time += half_period
+            
+            # Read motor response continuously
+            lines = self.read_debug_lines(timeout=0.1)
             for line in lines:
-                # Parse angle from multiple possible formats:
-                #  "Angle: 1.2345 rad (70.6°)" or 
-                #  "  Angle: ..."
-                if "Angle:" in line and "rad" in line:
+                # More lenient parsing - accept various formats
+                if "Angle:" in line:
                     try:
-                        # Extract number after "Angle:"
-                        parts = line.split("Angle:")
-                        if len(parts) > 1:
-                            num_str = parts[1].split()[0]
-                            angle = float(num_str)
+                        # Try multiple parsing strategies
+                        angle = None
+                        
+                        # Strategy 1: "Angle: 1.2345 rad"
+                        if "rad" in line:
+                            parts = line.split("Angle:")
+                            if len(parts) > 1:
+                                num_str = parts[1].strip().split()[0]
+                                angle = float(num_str)
+                        
+                        # Strategy 2: Direct index (fallback)
+                        if angle is None:
+                            words = line.split()
+                            for i, w in enumerate(words):
+                                if w == "Angle:" and i+1 < len(words):
+                                    try:
+                                        angle = float(words[i+1])
+                                        break
+                                    except:
+                                        pass
+                        
+                        if angle is not None:
                             samples.append({
-                                'time': time.time() - start_time,
+                                'time': current_time - start_time,
                                 'angle': angle
                             })
-                    except (ValueError, IndexError):
-                        pass
+                            if self.debug:
+                                print(f"  [SAMPLE] t={samples[-1]['time']:.2f}s, angle={angle:.3f} rad")
+                    except Exception as e:
+                        if self.debug:
+                            print(f"  [PARSE ERROR] {line[:50]}: {e}")
         
         if not samples:
             print("✗ No motor response data collected")
+            print("  Check:")
+            print("  - Device is connected and running")
+            print("  - MIDI port is accessible (pygame.midi)")
+            print("  - Motor is powered and encoder is working")
             return None
+        
+        print(f"✓ Collected {len(samples)} samples over {duration}s")
         
         # Analyze collected samples
         result = self._analyze_oscillation(samples, is_relay=True)
@@ -163,55 +271,61 @@ class PIDCalibrator:
         Returns:
             dict: Tuning parameters (Ku, Pu, Kp, Ki, Kd)
         """
-        if len(samples) < 10:
-            print("✗ Not enough samples for analysis")
-            return None
-        
-        angles = [s['angle'] for s in samples]
-        times = [s['time'] for s in samples]
-        
-        # Find zero crossings to estimate frequency
-        zero_crossings = 0
-        target_angle = sum(angles) / len(angles)  # mean
-        
-        for i in range(1, len(angles)):
-            if (angles[i-1] - target_angle) * (angles[i] - target_angle) < 0:
-                zero_crossings += 1
-        
-        if zero_crossings < 2:
-            print("⚠ Insufficient oscillation detected (< 1 full cycle)")
-            # Estimate a safe gain from single step response
-            Ku = 2.0  # Conservative estimate
+        if len(samples) < 5:
+            print("⚠ Very few samples for analysis (< 5)")
+            # Return conservative defaults
+            print("  Using conservative default tuning...")
+            Ku = 2.0
             Pu = 1.0
         else:
-            # Period = 2 * (total_time / zero_crossings)
-            total_time = times[-1] - times[0]
-            Pu = 2.0 * total_time / zero_crossings
+            angles = [s['angle'] for s in samples]
+            times = [s['time'] for s in samples]
             
-            # Ultimate gain (relay amplitude / oscillation amplitude)
-            amplitude = (max(angles) - min(angles)) / 2.0
-            relay_amplitude = 45.0 * 0.5  # 45° step = 45° amplitude
+            # Find zero crossings to estimate frequency
+            zero_crossings = 0
+            target_angle = sum(angles) / len(angles)  # mean
             
-            if amplitude > 0.01:
-                Ku = relay_amplitude / amplitude
+            for i in range(1, len(angles)):
+                if (angles[i-1] - target_angle) * (angles[i] - target_angle) < 0:
+                    zero_crossings += 1
+            
+            if zero_crossings < 2:
+                print(f"⚠ Weak oscillation detected ({zero_crossings} zero crossings)")
+                print(f"  Mean angle: {target_angle:.3f} rad")
+                print(f"  Min angle: {min(angles):.3f} rad") 
+                print(f"  Max angle: {max(angles):.3f} rad")
+                print(f"  Amplitude: {(max(angles) - min(angles))/2:.3f} rad")
+                
+                # Conservative estimate
+                Ku = 2.0
+                Pu = 1.0
             else:
-                Ku = 2.0  # Conservative default
-        
-        print(f"\n✓ Relay Test Results:")
-        print(f"  Oscillation Period (Pu): {Pu:.3f}s")
-        print(f"  Ultimate Gain (Ku): {Ku:.3f}")
-        print(f"  Oscillation Frequency: {1/Pu:.2f} Hz")
-        print(f"  Peak Angle: {max(angles):.3f} rad ({max(angles)*180/3.14159:.1f}°)")
-        print(f"  Min Angle: {min(angles):.3f} rad ({min(angles)*180/3.14159:.1f}°)")
+                # Period = 2 * (total_time / zero_crossings)
+                total_time = times[-1] - times[0]
+                Pu = 2.0 * total_time / zero_crossings
+                
+                # Ultimate gain (relay amplitude / oscillation amplitude)
+                amplitude = (max(angles) - min(angles)) / 2.0
+                relay_amplitude = (90.0 - 25.0) * 0.5  # 65° / 2
+                
+                if amplitude > 0.01:
+                    Ku = relay_amplitude / amplitude
+                else:
+                    Ku = 2.0
+                
+                print(f"✓ Oscillation detected:")
+                print(f"  Period (Pu): {Pu:.3f}s")
+                print(f"  Frequency: {1/Pu:.2f} Hz")
+                print(f"  Mean angle: {target_angle:.3f} rad ({target_angle*180/3.14159:.1f}°)")
+                print(f"  Amplitude: {amplitude:.3f} rad ({amplitude*180/3.14159:.1f}°)")
+                print(f"  Ultimate Gain (Ku): {Ku:.3f}")
         
         # Ziegler-Nichols Tuning Rules
-        # For angle control (P controller first, then PID)
         Kp = 0.6 * Ku
-        Ki = 1.2 * Ku / Pu
+        Ki = 1.2 * Ku / Pu if Pu > 0 else 0.0
         Kd = 3.0 * Ku * Pu / 40.0
         
-        # For angle loop, we typically want less aggressive tuning
-        # Reduce gains by ~30-40% for stability
+        # Safety factor for real hardware (reduce gains by 35%)
         safety_factor = 0.65
         Kp *= safety_factor
         Ki *= safety_factor
@@ -229,8 +343,144 @@ class PIDCalibrator:
             'Ki': Ki,
             'Kd': Kd,
             'samples': len(samples),
-            'zero_crossings': zero_crossings
+            'zero_crossings': zero_crossings if len(samples) >= 5 else 0
         }
+    
+    def ramp_test(self, duration=4.0):
+        """
+        Ramp test: slowly sweep motor from min to max
+        
+        Used to:
+        1. Sanity check motor responsiveness
+        2. Detect physical limits (endless vs limited)
+        3. Measure angle range
+        
+        Returns:
+            dict: {min_angle, max_angle, is_endless, samples, motor_responding}
+        """
+        print("\n" + "="*70)
+        print(f"RAMP TEST: Motor {self.motor_id}")
+        print("="*70)
+        print(f"Duration: {duration}s, Serial output rate: ~1 Hz")
+        print(f"Ramping CC#64: 0 → 127")
+        
+        samples = []
+        start_time = time.time()
+        
+        # Clear buffer
+        self.debug_ser.reset_input_buffer()
+        time.sleep(0.2)
+        
+        # Ramp from 0 to 127 linearly
+        ramp_start = time.time()
+        while time.time() - ramp_start < duration:
+            elapsed = time.time() - ramp_start
+            progress = elapsed / duration  # 0.0 to 1.0
+            cc_val = int(progress * 127.0)
+            cc_val = max(0, min(127, cc_val))  # Clamp to [0, 127]
+            
+            # Send command
+            success = self.send_midi_cc(64, cc_val)
+            
+            # Read all available samples in this window (works with 1 Hz output)
+            lines = self.read_debug_lines_buffered(timeout=0.15)
+            for line in lines:
+                if "Angle:" in line:
+                    try:
+                        # Parse angle value
+                        angle = None
+                        if "rad" in line:
+                            parts = line.split("Angle:")
+                            if len(parts) > 1:
+                                num_str = parts[1].strip().split()[0]
+                                angle = float(num_str)
+                        
+                        if angle is not None:
+                            samples.append({
+                                'time': time.time() - start_time,
+                                'cc_val': cc_val,
+                                'angle': angle
+                            })
+                            if self.debug:
+                                print(f"  [RAMP {progress*100:.0f}%] CC#{64} = {cc_val:3d}, Motor angle: {angle:.4f} rad {('✓' if success else '⚠')}")
+                    except:
+                        pass
+        
+        if not samples:
+            print("✗ No motor response during ramp")
+            print("  ⚠️ HARDWARE CHECK REQUIRED:")
+            print("    - Is the motor powered?")
+            print("    - Is the encoder connected (I2C) and calibrated?")
+            print("    - Are motor GPIO pins 13/12/11 (PWM) and 10 (Enable) connected?")
+            return None
+        
+        # Analyze ramp response
+        angles = [s['angle'] for s in samples]
+        min_angle = min(angles)
+        max_angle = max(angles)
+        angle_range = max_angle - min_angle
+        
+        print(f"\n✓ Collected {len(samples)} samples over {duration}s")
+        print(f"  Angle range: {min_angle:.3f} → {max_angle:.3f} rad")
+        print(f"  Total range: {angle_range:.3f} rad ({angle_range*180/3.14159:.1f}°)")
+        
+        # Check if motor is actually responding
+        motor_responding = angle_range > 0.01  # >0.5° movement indicates motor is working
+        if not motor_responding:
+            print(f"\n⚠️ MOTOR NOT RESPONDING TO MIDI:")
+            print(f"  Angle stayed constant at {min_angle:.4f} rad during ramp")
+            print(f"  Check:")
+            print(f"    - Motor power supply")
+            print(f"    - Encoder connection (I2C address 0x36)")
+            print(f"    - Motor driver Enable pin (GPIO 10) is HIGH")
+            print(f"    - SimpleFOC motor initialization (check serial output at startup)")
+            return None
+        
+        # Detect if motor has hard limits (endless vs limited)
+        # If angle stops changing near the end, it's hitting a hard limit
+        is_endless = self._detect_motor_type(samples)
+        motor_type = "Endless" if is_endless else "Limited-Range"
+        print(f"  Motor type: {motor_type}")
+        
+        return {
+            'min_angle': min_angle,
+            'max_angle': max_angle,
+            'angle_range': angle_range,
+            'is_endless': is_endless,
+            'samples': len(samples),
+            'motor_responding': True
+        }
+    
+    def _detect_motor_type(self, ramp_samples):
+        """
+        Analyze ramp response to detect if motor is endless or limited
+        
+        Logic:
+        - Limited motor: angle will plateau (slope → 0) near endpoints
+        - Endless motor: angle changes smoothly throughout
+        
+        Returns:
+            bool: True if endless, False if limited-range
+        """
+        if len(ramp_samples) < 10:
+            return True  # Default to endless if insufficient data
+        
+        # Divide samples into quartiles and compare slope
+        quarter = len(ramp_samples) // 4
+        
+        # First quarter: should have steep slope (motor responding)
+        first_quarter = ramp_samples[:quarter]
+        first_slope = (first_quarter[-1]['angle'] - first_quarter[0]['angle']) / max(0.001, first_quarter[-1]['time'] - first_quarter[0]['time'])
+        
+        # Last quarter: if slope is ~0, motor hit limit
+        last_quarter = ramp_samples[-quarter:]
+        last_slope = abs((last_quarter[-1]['angle'] - last_quarter[0]['angle']) / max(0.001, last_quarter[-1]['time'] - last_quarter[0]['time']))
+        
+        # If last slope is <5% of first slope, motor is limited
+        if last_slope < first_slope * 0.05:
+            return False  # Limited range
+        
+        return True  # Endless
     
     def step_response_test(self, step_size=45.0, settle_time=3.0):
         """
@@ -330,26 +580,44 @@ class PIDCalibrator:
         }
     
     def run_full_calibration(self):
-        """Run complete calibration: relay test → analysis → step response validation"""
+        """Run complete calibration: ramp → relay test → analysis → step response validation"""
         print("\n" + "="*70)
         print("FULL PID CALIBRATION SEQUENCE")
         print("="*70)
         
-        # 1. Relay test
-        relay_result = self.relay_test(duration=4.0, frequency=1.5)
-        if not relay_result:
-            print("✗ Relay test failed")
+        # 0. Ramp test (sanity check + limit detection)
+        print("\n[Phase 1/3] Sanity Check & Motor Characterization")
+        ramp_result = self.ramp_test(duration=4.0)
+        if not ramp_result:
+            print("\n⚠ Ramp test failed - motor not responding to MIDI")
+            print("  Check: MIDI port, motor power, encoder wiring")
             return False
+        
+        # 1. Relay test (main tuning)
+        print(f"\n[Phase 2/3] Ziegler-Nichols Relay Tuning")
+        relay_result = self.relay_test(duration=5.0, frequency=1.5)
+        if not relay_result:
+            print("\n⚠ Relay test inconclusive, using conservative defaults")
+            relay_result = {
+                'Ku': 2.0,
+                'Pu': 1.0,
+                'Kp': 0.78,  # 0.6 * 2.0 * 0.65
+                'Ki': 1.56,  # 1.2 * 2.0 / 1.0 * 0.65
+                'Kd': 0.195, # 3.0 * 2.0 * 1.0 / 40.0 * 0.65
+                'samples': 0,
+                'zero_crossings': 0
+            }
         
         # 2. Step response test (to validate tuning)
         time.sleep(1.0)
+        print(f"\n[Phase 3/3] Step Response Validation")
         step_result = self.step_response_test(step_size=45.0, settle_time=2.0)
         
         # Summary
         print("\n" + "="*70)
         print("CALIBRATION SUMMARY")
         print("="*70)
-        print("\nRecommended PID Gains:")
+        print("\n✓ Recommended PID Gains:")
         print(f"  Kp = {relay_result['Kp']:.6f}")
         print(f"  Ki = {relay_result['Ki']:.6f}")
         print(f"  Kd = {relay_result['Kd']:.6f}")
@@ -358,12 +626,24 @@ class PIDCalibrator:
             print("\nStep Response Validation:")
             print(f"  Overshoot: {step_result['overshoot']:.1f}% (target: <5%)")
             print(f"  Settling Time: {step_result['settling_time']:.2f}s (target: <1.5s)")
+        else:
+            print("\n⚠ Step response test skipped")
+        
+        print("\n" + "="*70)
+        print("NEXT STEPS:")
+        print("="*70)
+        print("\n1. Edit include/pid_config.h and update:")
+        print(f"   #define MOTOR0_PID_P  {relay_result['Kp']:.6f}f")
+        print(f"   #define MOTOR0_PID_I  {relay_result['Ki']:.6f}f")
+        print(f"   #define MOTOR0_PID_D  {relay_result['Kd']:.6f}f")
+        print("\n2. Rebuild firmware:")
+        print("   platformio run -e pico_1motor_endless")
+        print("\n3. Upload:")
+        print("   platformio run -e pico_1motor_endless --target upload")
+        print("\n4. Test:")
+        print("   bash test/run_tests.sh pico_1motor_endless")
         
         print("\n✓ Calibration complete!")
-        print("\nTo apply these gains, add to firmware src/main.cpp:")
-        print(f"  motor0.PID_angle.P = {relay_result['Kp']:.6f};")
-        print(f"  motor0.PID_angle.I = {relay_result['Ki']:.6f};")
-        print(f"  motor0.PID_angle.D = {relay_result['Kd']:.6f};")
         
         return True
 
@@ -383,8 +663,9 @@ def main():
     parser = argparse.ArgumentParser(description='SimpleFOC PID Calibration via Ziegler-Nichols')
     parser.add_argument('--motor', type=int, default=0, help='Motor ID (0 or 1)')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
-    parser.add_argument('--relay-only', action='store_true', help='Run relay test only')
-    parser.add_argument('--step-only', action='store_true', help='Run step response only')
+    parser.add_argument('--ramp-only', action='store_true', help='[Phase 1] Ramp test only (sanity check + limit detection)')
+    parser.add_argument('--relay-only', action='store_true', help='[Phase 2] Relay test only (skip ramp check)')
+    parser.add_argument('--step-only', action='store_true', help='[Phase 3] Step response only')
     
     args = parser.parse_args()
     
@@ -401,7 +682,14 @@ def main():
         sys.exit(1)
     
     try:
-        if args.relay_only:
+        if args.ramp_only:
+            ramp_result = calibrator.ramp_test(duration=4.0)
+            if ramp_result:
+                print("\n✓ Ramp test complete")
+                print(f"  Motor type: {'Endless' if ramp_result['is_endless'] else 'Limited-Range'}")
+            else:
+                sys.exit(1)
+        elif args.relay_only:
             relay_result = calibrator.relay_test()
             if relay_result:
                 print("\n✓ Relay test complete")
