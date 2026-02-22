@@ -23,14 +23,12 @@
 #include "Adafruit_TinyUSB.h"
 
 // ============================================================================
-// DUAL USB CDC CONFIGURATION
+// USB DEVICE INTERFACES
 // ============================================================================
-// CDC instance for MIDI input (CDC#1)
-// Note: Serial is automatically CDC#0 via Arduino framework
-Adafruit_USBD_CDC usb_cdc_midi;
-// HID device (USB)
+// HID device (USB joystick)
 Adafruit_USBD_HID usb_hid;
-Adafruit_USBD_MIDI usb_midi;  // Native USB MIDI device (optional)
+// Native USB MIDI device
+Adafruit_USBD_MIDI usb_midi;
 
 // ============================================================================
 // MOTOR DEFINITIONS - Phase 2: Dual Motor Abstraction
@@ -345,21 +343,20 @@ void setup() {
     // ===== USB HID Setup =====
   setup_usb_hid();
 
-  // Initialize dual USB CDC
+  // Initialize USB devices
   // Serial (CDC#0): Debug output at 115200 baud (built-in via Arduino)
-  // usb_cdc_midi (CDC#1): MIDI input at 31250 baud  
   Serial.begin(115200);
-  // Start the CDC instance (debug already on Serial)
-  usb_cdc_midi.begin(31250);
-  usb_midi.begin(31250);
+  // Start native USB MIDI device (host will create a MIDI port)
+  usb_midi.begin();
   
   // Wait for USB enumeration
   //delay(2000);
   
   Serial.println("\n=== USB HID Joystick Controller ===");
-  Serial.println("Dual USB CDC Initialized:");
-  Serial.println("  /dev/ttyACM0 (115200) - Debug output");
-  Serial.println("  /dev/ttyACM1 (31250)  - MIDI input");
+  Serial.println("USB Interfaces Initialized:");
+  Serial.println("  CDC#0 /dev/ttyACM0 (115200) - Debug output");
+  Serial.println("  Native USB MIDI port - MIDI input @ 31250 baud");
+  Serial.println("  USB HID Joystick (Gamepad) - 8 buttons + 2 axes");
   Serial.println("Initializing Motor 0...");
   
   // ===== Motor 0 Setup =====
@@ -429,14 +426,9 @@ void loop() {
   // current_angle[1] = motor1.shaft_angle;
   // motor1.move(target_angle[1]);
   
-  // ===== 2. MIDI Input (Async via USB CDC#1 and native USB MIDI) =====
-  // Read MIDI CC commands from CDC#1 at 31250 baud
+  // ===== 2. MIDI Input (Async via native USB MIDI) =====
+  // Read MIDI CC commands from native USB MIDI port
   // Format: Standard 3-byte MIDI CC messages
-  while (usb_cdc_midi.available()) {
-    handle_midi_byte(usb_cdc_midi.read());
-  }
-
-  // Also read from native USB MIDI if available (TinyUSB MIDI)
   while (usb_midi.available()) {
     handle_midi_byte(usb_midi.read());
   }
