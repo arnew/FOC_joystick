@@ -1,7 +1,26 @@
-/* Project-level TinyUSB configuration to override framework defaults
- * This file forces the device to expose 2 CDC interfaces and 1 HID interface.
- * Placing this in the repository `include/` ensures it is used instead of
- * the system-wide tusb_config.h provided by the framework.
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2019 Ha Thach (tinyusb.org)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
  */
 
 #ifndef _TUSB_CONFIG_H_
@@ -22,10 +41,18 @@
 #define CFG_TUSB_RHPORT0_MODE     OPT_MODE_DEVICE
 #define CFG_TUSB_OS               OPT_OS_PICO
 
+// CFG_TUSB_DEBUG is defined by compiler in DEBUG build
 #ifndef CFG_TUSB_DEBUG
 #define CFG_TUSB_DEBUG           0
 #endif
 
+/* USB DMA on some MCUs can only access a specific SRAM region with restriction on alignment.
+ * Tinyusb use follows macros to declare transferring memory so that they can be put
+ * into those specific section.
+ * e.g
+ * - CFG_TUSB_MEM SECTION : __attribute__ (( section(".usb_ram") ))
+ * - CFG_TUSB_MEM_ALIGN   : __attribute__ ((aligned(4)))
+ */
 #ifndef CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_SECTION
 #endif
@@ -35,33 +62,28 @@
 #endif
 
 //--------------------------------------------------------------------
-// DEVICE CONFIGURATION (project overrides)
+// DEVICE CONFIGURATION
 //--------------------------------------------------------------------
 
 #ifndef CFG_TUD_ENDPOINT0_SIZE
 #define CFG_TUD_ENDPOINT0_SIZE    64
 #endif
 
-// Expose two CDC interfaces (debug + MIDI) and one HID interface
-#undef CFG_TUD_CDC
+//------------- CLASS -------------//
+#define CFG_TUD_HID              (2)
 #define CFG_TUD_CDC              (2)
-
-#undef CFG_TUD_HID
-#define CFG_TUD_HID              (1)
-
-// Keep MIDI device class off (we use CDC for MIDI transport)
-#undef CFG_TUD_MIDI
-#define CFG_TUD_MIDI             (0)
-
-#undef CFG_TUD_MSC
 #define CFG_TUD_MSC              (0)
-
-#undef CFG_TUD_VENDOR
+#define CFG_TUD_MIDI             (1)
 #define CFG_TUD_VENDOR           (0)
 
 #define CFG_TUD_CDC_RX_BUFSIZE  (256)
 #define CFG_TUD_CDC_TX_BUFSIZE  (256)
+#define CFG_TUD_MIDI_RX_BUFSIZE  (256)
+#define CFG_TUD_MIDI_TX_BUFSIZE  (256)
 
+#define CFG_TUD_MSC_EP_BUFSIZE  (64)
+
+// HID buffer size Should be sufficient to hold ID (if any) + Data
 #define CFG_TUD_HID_EP_BUFSIZE  (64)
 
 #ifdef __cplusplus
