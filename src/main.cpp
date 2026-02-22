@@ -28,8 +28,6 @@
 // CDC instance for MIDI input (CDC#1)
 // Note: Serial is automatically CDC#0 via Arduino framework
 Adafruit_USBD_CDC usb_cdc_midi;
-// Native MIDI device (TinyUSB)
-Adafruit_USBD_MIDI usb_midi;
 // HID device (USB)
 Adafruit_USBD_HID usb_hid;
 
@@ -351,9 +349,7 @@ void setup() {
   // usb_cdc_midi (CDC#1): MIDI input at 31250 baud  
   Serial.begin(115200);
   // Start the CDC instance (debug already on Serial)
-  usb_cdc_midi.begin(115200);
-  // Start native USB MIDI device (host will create a MIDI port)
-  usb_midi.begin();
+  usb_cdc_midi.begin(31250);
   
   // Wait for USB enumeration
   //delay(2000);
@@ -434,14 +430,8 @@ void loop() {
   // ===== 2. MIDI Input (Async via USB CDC#1) =====
   // Read MIDI CC commands from CDC#1 at 31250 baud
   // Format: Standard 3-byte MIDI CC messages
-  // Read from CDC-based MIDI (backwards compatibility) if present
   while (usb_cdc_midi.available()) {
     handle_midi_byte(usb_cdc_midi.read());
-  }
-
-  // Read from native USB MIDI device (if host has created a MIDI port)
-  while (usb_midi.available()) {
-    handle_midi_byte(usb_midi.read());
   }
   
   // ===== 3. USB HID Output (~100 Hz) =====
