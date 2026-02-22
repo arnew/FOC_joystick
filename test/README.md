@@ -44,6 +44,64 @@ Example:
      ...
 ```
 
+### PID Calibration & Tuning Quality Evaluation
+
+**Auto-tune PID gains via Ziegler-Nichols relay method:**
+```bash
+python3 test/calibrate_pid.py --motor 0
+```
+
+This performs:
+1. **Velocity loop tuning** - Tunes inner velocity controller (PID_KP, PID_KI, PID_KD)
+2. **Angle loop tuning** - Tunes outer position controller (MOTOR0_PID_KP, MOTOR0_PID_KI, MOTOR0_PID_KD)
+3. **Step response test** - Validates tuning quality with comprehensive metrics
+4. **Steady-state analysis** - Measures position noise, drift, and stability
+
+**Tuning Quality Report** (automatically generated):
+```
+TUNING QUALITY ASSESSMENT
+Overall Score: 28.4/100.0 ✗ POOR
+
+Breakdown:
+  Overshoot: 0.0% (target: <5%)
+  Settling Time: 3.50s (target: <1.5s)
+    → Slow: Slightly increase Kp
+  Position Noise: 13.53° (target: <0.5°)
+    → HIGH NOISE: Increase Kd, check encoder stability
+  Position Drift: 24.64° over 503 samples
+    → UNSTABLE: Increase Ki for position holding
+  Steady-State Stability: 52.1% (target: >90%)
+    → POOR STABILITY: Position not holding
+
+RECOMMENDATION: Re-run calibration or manually adjust gains:
+  • Inner loop (velocity): Run --velocity-only and increase ultimate gain tuning
+  • Try increasing Ki values to improve position holding
+  • Increase Kd values to reduce jitter/noise
+```
+
+**Test just step response (fast):**
+```bash
+python3 test/calibrate_pid.py --motor 0 --step-only
+```
+
+**Re-tune specific loop:**
+```bash
+# Velocity loop only (inner loop)
+python3 test/calibrate_pid.py --motor 0 --velocity-only
+
+# Angle loop only (outer loop)
+python3 test/calibrate_pid.py --motor 0 --angle-only
+```
+
+**Quality Metrics Explained:**
+- **Overshoot**: How much position overshoots target (target <5%)
+- **Settling Time**: How fast it reaches steady state (target <1.5s)
+- **Position Noise**: High-frequency jitter around setpoint (target <0.5°)
+- **Position Drift**: Low-frequency wandering away from target (target <0.1°)
+- **Stability**: Percentage of time position is within ±2.9° band (target >90%)
+
+See [.agentic/TUNING_QUALITY_ANALYSIS.md](../.agentic/TUNING_QUALITY_ANALYSIS.md) for detailed tuning recommendations and troubleshooting.
+
 ## Files
 
 | File | Purpose |

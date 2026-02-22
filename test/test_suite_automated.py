@@ -14,6 +14,7 @@ import sys
 import re
 import glob
 import os
+import argparse
 from pathlib import Path
 from serial.tools import list_ports
 
@@ -100,12 +101,13 @@ def wait_for_ports(timeout=10, poll_interval=0.5,
 class HIDControllerTestSuite:
     """Automated test suite for USB HID joystick controller"""
     
-    def __init__(self, debug_port=None, midi_port=None):
+    def __init__(self, debug_port=None, midi_port=None, enable_monitor=False):
         """Initialize test suite
         
         Args:
             debug_port: Serial port for debug output (e.g. /dev/ttyACM0)
             midi_port: Serial port for MIDI input (e.g. /dev/ttyACM1)
+            enable_monitor: Enable optional high-speed monitor test (TEST 5B)
         """
         # Allow explicit env overrides
         env_dbg = os.environ.get("DEBUG_PORT")
@@ -137,6 +139,7 @@ class HIDControllerTestSuite:
 
         self.debug_port = debug_port
         self.midi_port = midi_port  # May still be used for backwards compat logging
+        self.enable_monitor = enable_monitor  # Enable optional high-speed monitor test
         self.debug_ser = None
         self.midi_ser = None
         self.midi_output = None  # pygame.midi output device
@@ -314,7 +317,8 @@ class HIDControllerTestSuite:
         # Check for valid debug output format
         valid_response = False
         for line in lines:
-            if "Angle:" in line and "rad" in line:
+            # Support both old format ("Angle: X rad") and new format ("A=X.XX T=Y.YY")
+            if ("Angle:" in line and "rad" in line) or re.search(r'A=[\-\d.]+', line):
                 valid_response = True
                 print(f"  ✓ Device responsive: {line[:60]}")
                 break
@@ -339,8 +343,10 @@ class HIDControllerTestSuite:
         
         initial_angle = None
         for line in lines:
-            # Look for "Angle: X.XXXX rad"
+            # Support both old format ("Angle: X rad") and new format ("A=X.XX")
             match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
+            if not match:
+                match = re.search(r'A=([\-\d.]+)', line)  # New compact format
             if match:
                 initial_angle = float(match.group(1))
                 break
@@ -460,10 +466,12 @@ class HIDControllerTestSuite:
             self.send_midi_cc(64, cc_val)
             time.sleep(0.3)
             
-            # Read the angle
+            # Read the angle (support both old and new format)
             lines = self.read_debug_lines(timeout=0.5)
             for line in lines:
                 match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
+                if not match:
+                    match = re.search(r'A=([\-\d.]+)', line)  # New compact format
                 if match:
                     angle = float(match.group(1))
                     positions.append((cc_val, angle))
@@ -581,7 +589,10 @@ class HIDControllerTestSuite:
             self.test_motor_response_to_midi()
             self.test_joystick_scaling()
             self.test_motor_sweep()
-            self.test_motor_dynamics_highspeed()  # Optional high-speed monitor
+            
+            # Optional high-speed monitor test (requires --enable-monitor flag)
+            if self.enable_monitor:
+                self.test_motor_dynamics_highspeed()
             
             # Print summary
             all_pass = self.print_results()
@@ -593,7 +604,29 @@ class HIDControllerTestSuite:
 
 def main():
     """Entry point"""
-    suite = HIDControllerTestSuite()
+    parser = argparse.ArgumentParser(
+        description="Automated test suite for USB HID joystick controller",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  python3 test_suite_automated.py                    # Run basic tests (no monitor)
+  python3 test_suite_automated.py --enable-monitor   # Include high-speed dynamics test
+        """
+    )
+    parser.add_argument(
+        "--enable-monitor",
+        action="store_true",
+        help="Enable optional high-speed motor dynamics monitoring (TEST 5B)"
+    )
+    parser.add_argument("--debug-port", help="Serial port for debug output")
+    parser.add_argument("--midi-port", help="Serial port for MIDI input")
+    
+    args = parser.parse_args()
+    
+    suite = HIDControllerTestSuite(
+        debug_port=args.debug_port,
+        midi_port=args.midi_port,
+        enable_monitor=args.enable_monitor
+    )
     success = suite.run_all()
     sys.exit(0 if success else 1)
 

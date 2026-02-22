@@ -468,25 +468,15 @@ void loop() {
     last_hid_update = now;
   }
   
-  // ===== 4. Debug Serial Output (~1 Hz) =====
+  // ===== 4. Debug Serial Output (~100 Hz for high-speed monitoring) =====
   static unsigned long last_debug = 0;
   
-  if (now - last_debug >= 1000) {
-    // Motor angles (quantized to 0.1 rad steps)
-    float angle_q = round(current_angle[0] * notch_factor) / notch_factor;
-    
-    Serial.print("Angle: ");
-    Serial.print(angle_q, 4);
-    Serial.print(" rad (");
-    Serial.print(angle_q * 180.0f / PI, 1);
-    Serial.print("°)");
-    
-    Serial.print(" | Target: ");
-    Serial.print(target_angle[0], 4);
-    
-    Serial.print(" | USB: ");
-    Serial.print(axis_values[0]);
-    Serial.println(" (0-1023)");
+  if (now - last_debug >= 10) {  // 10ms = 100 Hz output rate for HighSpeedMonitor
+    // Compact format: A=X.XX T=Y.YY for fast parsing and high frequency
+    Serial.print("A=");
+    Serial.print(current_angle[0], 2);
+    Serial.print(" T=");
+    Serial.println(target_angle[0], 2);
     
     last_debug = now;
   }

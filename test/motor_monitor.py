@@ -62,15 +62,16 @@ class HighSpeedMonitor:
                     if not line:
                         continue
                     
-                    # Parse: "Angle: 1.2345 rad | Target: 3.1416 | USB: 512"
-                    angle_match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
-                    target_match = re.search(r'Target:\s+([\-\d.]+)', line)
+                    # Parse compact format: "A=1.23 T=4.56"
+                    # A = angle (radians), T = target (radians)
+                    angle_match = re.search(r'A=([\-\d.]+)', line)
+                    target_match = re.search(r'T=([\-\d.]+)', line)
                     
-                    if angle_match:
+                    if angle_match and target_match:
                         current_time = time.time()
                         time_offset = current_time - self.start_time
                         angle = float(angle_match.group(1))
-                        target = float(target_match.group(1)) if target_match else 0.0
+                        target = float(target_match.group(1))
                         
                         # Compute velocity
                         velocity = 0.0
