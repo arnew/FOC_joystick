@@ -281,17 +281,27 @@ const uint8_t joystick_hid_report_descriptor[] = {
   0x05, 0x01,       // Usage Page (Generic Desktop)
   0x09, 0x04,       // Usage (Joystick)
   0xA1, 0x01,       // Collection (Application)
-    0x09, 0x01,     //   Usage (Pointer)
-    0xA1, 0x00,     //   Collection (Physical)
-      0x05, 0x01,   //     Usage Page (Generic Desktop)
-      0x09, 0x30,   //     Usage (X)
-      0x09, 0x31,   //     Usage (Y)
-      0x15, 0x00,   //     Logical Minimum (0)
-      0x26, 0xFF, 0x03, // Logical Maximum (1023)
-      0x75, 0x10,   //     Report Size (16)
-      0x95, 0x02,   //     Report Count (2)
-      0x81, 0x02,   //     Input (Data,Var,Abs)
-    0xC0,           //   End Collection
+
+    // Buttons (8 bits)
+    0x05, 0x09,     //   Usage Page (Button)
+    0x19, 0x01,     //   Usage Minimum (Button 1)
+    0x29, 0x08,     //   Usage Maximum (Button 8)
+    0x15, 0x00,     //   Logical Minimum (0)
+    0x25, 0x01,     //   Logical Maximum (1)
+    0x75, 0x01,     //   Report Size (1)
+    0x95, 0x08,     //   Report Count (8)
+    0x81, 0x02,     //   Input (Data,Var,Abs)
+
+    // Axes X and Y (16-bit each)
+    0x05, 0x01,     //   Usage Page (Generic Desktop)
+    0x09, 0x30,     //   Usage (X)
+    0x09, 0x31,     //   Usage (Y)
+    0x15, 0x00,     //   Logical Minimum (0)
+    0x26, 0xFF, 0x03, // Logical Maximum (1023)
+    0x75, 0x10,     //   Report Size (16)
+    0x95, 0x02,     //   Report Count (2)
+    0x81, 0x02,     //   Input (Data,Var,Abs)
+
   0xC0              // End Collection
 };
 
