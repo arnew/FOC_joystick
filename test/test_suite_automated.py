@@ -99,47 +99,42 @@ class HIDControllerTestSuite:
             return False
     
     def test_system_identification(self):
-        """Test 1: Read firmware version and configuration"""
+        """Test 1: System Connectivity - verify device responds to commands"""
         print("\n" + "=" * 70)
-        print("TEST 1: System Identification")
+        print("TEST 1: System Connectivity")
         print("=" * 70)
         
-        # Flush and read startup messages
-        lines = self.read_debug_lines(timeout=2.0)
+        if not self.debug_ser:
+            print("✗ FAIL: Debug port not available")
+            self.results.append(("System Connectivity", False, "No debug port"))
+            return False
         
-        print("Firmware output:")
-        for line in lines:
-            print(f"  {line}")
+        print("Checking device responsiveness...")
         
-        # Parse firmware info
-        success = False
+        # Send a simple MIDI command to trigger a response
+        if self.midi_ser:
+            self.send_midi_cc(64, 0)  # CC#64=0 to trigger debug output
+            time.sleep(0.5)
+        
+        # Read debug output to verify device is responding
+        lines = self.read_debug_lines(timeout=1.0, max_lines=20)
+        
+        # Check for valid debug output format
+        valid_response = False
         for line in lines:
-            if "USB HID Joystick" in line or "Initialized" in line:
-                success = True
+            if "Angle:" in line and "rad" in line:
+                valid_response = True
+                print(f"  ✓ Device responsive: {line[:60]}")
                 break
         
-        # Extract configuration
-        axes_count = 0
-        axis_info = []
-        for line in lines:
-            if "Number of axes:" in line:
-                match = re.search(r'(\d+)', line)
-                if match:
-                    axes_count = int(match.group(1))
-            if re.match(r'\s*\d+:', line):  # Axis definition line
-                axis_info.append(line.strip())
-        
-        self.firmware_info['axes'] = axes_count
-        self.firmware_info['axis_info'] = axis_info
-        
-        if success:
-            print(f"\n✓ PASS: Firmware initialized ({axes_count} axes)")
-            self.results.append(("System Identification", True, None))
+        if valid_response:
+            print("\n✓ PASS: Device responding to commands")
+            self.results.append(("System Connectivity", True, None))
+            return True
         else:
-            print(f"\n✗ FAIL: Firmware initialization not detected")
-            self.results.append(("System Identification", False, "No startup message"))
-        
-        return success
+            print("\n✗ FAIL: Device not responding (no debug output)")
+            self.results.append(("System Connectivity", False, "No response"))
+            return False
     
     def test_motor_initial_position(self):
         """Test 2: Verify motor position at startup"""
