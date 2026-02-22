@@ -70,8 +70,22 @@ if [ -z "${DEBUG_PORT:-}" ] || [ -z "${MIDI_PORT:-}" ]; then
   fi
 fi
 
+set +e
 python3 test/test_suite_automated.py
+rc_serial=$?
+set -e
 
 # Run HID/joystick presence test (non-root friendly)
 echo "Running HID/joystick presence test..."
+set +e
 python3 test/test_hid_report.py
+rc_hid=$?
+set -e
+
+echo "Serial tests exit code: ${rc_serial}, HID test exit code: ${rc_hid}"
+
+# Exit non-zero if either test failed
+if [ ${rc_serial} -ne 0 ] || [ ${rc_hid} -ne 0 ]; then
+  echo "One or more tests failed"
+  exit 1
+fi

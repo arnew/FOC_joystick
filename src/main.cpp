@@ -28,6 +28,7 @@
 // CDC instance for MIDI input (CDC#1)
 // Note: Serial is automatically CDC#0 via Arduino framework
 Adafruit_USBD_CDC usb_cdc_midi;
+Adafruit_USBD_HID usb_hid;
 
 // ============================================================================
 // MOTOR DEFINITIONS - Phase 2: Dual Motor Abstraction
@@ -275,14 +276,34 @@ typedef struct {
 
 hid_joystick_report_t current_report = {512, 512};
 
+// Simple 2-axis 16-bit joystick HID report descriptor
+const uint8_t joystick_hid_report_descriptor[] = {
+  0x05, 0x01,       // Usage Page (Generic Desktop)
+  0x09, 0x04,       // Usage (Joystick)
+  0xA1, 0x01,       // Collection (Application)
+    0x09, 0x01,     //   Usage (Pointer)
+    0xA1, 0x00,     //   Collection (Physical)
+      0x05, 0x01,   //     Usage Page (Generic Desktop)
+      0x09, 0x30,   //     Usage (X)
+      0x09, 0x31,   //     Usage (Y)
+      0x15, 0x00,   //     Logical Minimum (0)
+      0x26, 0xFF, 0x03, // Logical Maximum (1023)
+      0x75, 0x10,   //     Report Size (16)
+      0x95, 0x02,   //     Report Count (2)
+      0x81, 0x02,   //     Input (Data,Var,Abs)
+    0xC0,           //   End Collection
+  0xC0              // End Collection
+};
+
 /**
  * Initialize USB HID Joystick
  * TODO: Implement with proper TinyUSB or RP2040 USB library
  */
 void setup_usb_hid() {
-  // TODO: Implement USB HID support
-  // For now, just a placeholder
-  Serial.println("USB HID support (TODO)");
+  // Initialize HID device with joystick descriptor
+  usb_hid.setReportDescriptor(joystick_hid_report_descriptor, sizeof(joystick_hid_report_descriptor));
+  usb_hid.begin();
+  Serial.println("USB HID initialized");
 }
 
 /**
@@ -290,11 +311,13 @@ void setup_usb_hid() {
  * TODO: Implement actual HID report transmission
  */
 void send_hid_report() {
-  // TODO: Implement actual HID report send
   if (axis_values[0] != current_report.x || axis_values[1] != current_report.y) {
     current_report.x = axis_values[0];
     current_report.y = axis_values[1];
-    // HID report would be sent here
+    // Send HID report on interface 0
+    if (usb_hid.ready()) {
+      usb_hid.sendReport(0, &current_report, sizeof(current_report));
+    }
   }
 }
 
