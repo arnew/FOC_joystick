@@ -24,7 +24,7 @@
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
 // Based on SimpleFOC defaults: DEF_PID_VEL_P=0.5f, DEF_PID_VEL_I=10.0f, DEF_PID_VEL_D=0.0f
-#define MOTOR0_VELOCITY_P  0.5f   // P for velocity loop (SimpleFOC default)
+#define MOTOR0_VELOCITY_P  0.5f*0.25   // P for velocity loop (SimpleFOC default)
 #define MOTOR0_VELOCITY_I  10.0f  // I for velocity loop (SimpleFOC default, reduces steady-state error)
 #define MOTOR0_VELOCITY_D  0.0f   // D for velocity loop
 
