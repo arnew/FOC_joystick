@@ -313,11 +313,11 @@ src/
   config.h          (MotorProfile, AxisProfile, A320_Config)
 platformio.ini      (updated with TinyUSB dependency)
 .agentic/
-  PLANNING.md       (this file)
+  architecture/
+    PLANNING.md       (this file)
+    README.md         (code style guidelines)
 AGENTS.md           (updated with reference)
 README.md           (updated with status)
-.github/
-  copilot-instructions.md  (context for future work)
 ```
 
 ---

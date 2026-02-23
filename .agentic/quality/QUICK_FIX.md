@@ -238,4 +238,4 @@ Look for:
 4. Report new Quality Score and manual test results
 5. Iterate if needed using the tuning trade-offs guide
 
-**Questions?** Check [.agentic/TUNING_QUALITY_ANALYSIS.md](TUNING_QUALITY_ANALYSIS.md) for detailed diagnostics.
+**Questions?** Check [QUALITY_EVALUATION.md](QUALITY_EVALUATION.md) for detailed diagnostics.

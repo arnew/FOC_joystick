@@ -143,7 +143,7 @@ Response:
 
 - **PLANNING.md**: Full 6-phase architecture specification
 - **test/README.md**: Testing workflow and tools
-- **.github/copilot-instructions.md**: Coding guidelines
+- **.agentic/architecture/README.md**: Coding guidelines
 
 All phase 1-4 implementation complete and verified working.
 Phase 5 (HID joystick) stub code prepared.

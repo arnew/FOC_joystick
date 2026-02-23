@@ -115,7 +115,7 @@ python3 test/calibrate_pid.py --motor 0 --step-only
 ### Iterate
 Repeat: Adjust → Test → Evaluate → Adjust
 
-See [ONLINE_PARAMETER_TRANSFER.md](.agentic/ONLINE_PARAMETER_TRANSFER.md) for complete guide.
+See [../tuning/guides/ONLINE_PARAMETER_TRANSFER.md](../tuning/guides/ONLINE_PARAMETER_TRANSFER.md) for complete guide.
 
 ---
 
@@ -204,10 +204,9 @@ See [ONLINE_PARAMETER_TRANSFER.md](.agentic/ONLINE_PARAMETER_TRANSFER.md) for co
 
 ## 📝 Key Documentation
 
-- [ONLINE_PARAMETER_TRANSFER.md](.agentic/ONLINE_PARAMETER_TRANSFER.md) - User guide
-- [TUNING_QUALITY_ANALYSIS.md](.agentic/TUNING_QUALITY_ANALYSIS.md) - Detailed metrics
-- [QUICK_FIX.md](.agentic/QUICK_FIX.md) - Starting values for tuning
-- [QUALITY_EVALUATION_SUMMARY.md](.agentic/QUALITY_EVALUATION_SUMMARY.md) - Technical overview
+- [../tuning/guides/ONLINE_PARAMETER_TRANSFER.md](../tuning/guides/ONLINE_PARAMETER_TRANSFER.md) - User guide
+- [../quality/QUALITY_EVALUATION.md](../quality/QUALITY_EVALUATION.md) - Detailed metrics & technical overview
+- [../quality/QUICK_FIX.md](../quality/QUICK_FIX.md) - Starting values for tuning
 
 ---
 

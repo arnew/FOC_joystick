@@ -275,7 +275,7 @@ See [TUNING_QUALITY_ANALYSIS.md](TUNING_QUALITY_ANALYSIS.md) for:
 - Root cause analysis for tuning issues
 - Hardware troubleshooting (encoder, power supply)
 
-See [.agentic/QUICK_FIX.md](.agentic/QUICK_FIX.md) for:
+See [../../quality/QUICK_FIX.md](../../quality/QUICK_FIX.md) for:
 - Recommended starting gains
 - Common tuning patterns
 - When to adjust each parameter

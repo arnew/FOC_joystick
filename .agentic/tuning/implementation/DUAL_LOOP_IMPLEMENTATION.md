@@ -76,7 +76,7 @@ python3 test/test_suite_automated.py --enable-monitor  # Include TEST 5B
 - Format: Verbose "Angle: X rad..." → Compact "A=X.XX T=Y.YY"
 - Enables true high-speed monitoring of both controllers
 
-### 5. Documentation (`/.agentic/DUAL_LOOP_TUNING.md`)
+### 5. Documentation (`/tuning/guides/DUAL_LOOP_TUNING.md`)
 
 **New Guide Includes**:
 - Architecture diagram (cascade control)
