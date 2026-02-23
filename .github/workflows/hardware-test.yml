@@ -21,16 +21,22 @@ jobs:
       
       - name: Check dependencies
         run: |
-          python3 -c "import platformio" 2>/dev/null && echo "✓ platformio installed" || echo "✗ platformio missing"
+          # Add user pip bin to PATH
+          export PATH="$HOME/.local/bin:$PATH"
+          
+          python3 --version
+          which platformio || echo "⚠ platformio not in PATH"
           python3 -c "import serial" 2>/dev/null && echo "✓ pyserial installed" || echo "✗ pyserial missing"
           python3 -c "import pygame" 2>/dev/null && echo "✓ pygame installed" || echo "✗ pygame missing"
       
       - name: Build firmware
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           platformio run -e pico_1motor_endless
       
       - name: Upload firmware to device
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           platformio run -e pico_1motor_endless --target upload
       
       - name: Wait for device reset
