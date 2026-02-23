@@ -43,29 +43,48 @@ This repository uses a self-hosted GitHub runner with attached RP2040 hardware f
 
 ### Setting Up Self-Hosted Runner
 
+**Quick Setup** (recommended):
+1. Clone this repository on the runner machine
+2. Run the setup script:
+   ```bash
+   .github/setup-runner.sh
+   ```
+3. Log out and back in for group changes to take effect
+4. Follow GitHub's runner installation instructions
+
+**Manual Setup**:
 1. **GitHub Settings** → **Actions** → **Runners** → **New self-hosted runner**
 2. Follow setup instructions for Linux
-3. Install dependencies (system-wide, not pip):
+3. Install dependencies:
    ```bash
+   # Install system packages
    sudo apt-get update
-   sudo apt-get install python3 python3-pip python3-serial python3-pygame
+   sudo apt-get install python3-serial python3-pygame pipx
    
-   # Install PlatformIO with --break-system-packages or --user
-   python3 -m pip install --user platformio
-   # OR add to PATH: export PATH="$HOME/.local/bin:$PATH"
+   # Install PlatformIO via pipx (recommended for CLI tools)
+   pipx install platformio
+   pipx ensurepath
+   
+   # OR use pip with --break-system-packages (not recommended)
+   # python3 -m pip install --user --break-system-packages platformio
    ```
 4. Add user to `dialout` group for serial access:
    ```bash
    sudo usermod -a -G dialout $USER
    # Log out and back in for group change to take effect
    ```
-5. Connect RP2040 device to `/dev/ttyACM0`
-6. Start runner:
+5. Verify installation:
+   ```bash
+   platformio --version
+   ls -l /dev/ttyACM0  # Should show device
+   ```
+6. Connect RP2040 device to `/dev/ttyACM0`
+7. Start runner:
    ```bash
    ./run.sh
    ```
 
-**Note**: Dependencies must be pre-installed on the self-hosted runner. The workflow verifies but does not install packages (to avoid PEP 668 externally-managed environment issues).
+**Note**: Dependencies must be pre-installed on the self-hosted runner. PlatformIO installed via `pipx` goes to `~/.local/bin` which the workflow adds to PATH.
 
 ### Environment Variables
 
