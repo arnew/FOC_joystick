@@ -13,6 +13,7 @@ Git-flow. We use the "git flow" tool. All changes must be developed in feature/ 
 Test-driven. All changes must pass automated tests. Testing is wanted during development, before merging a branch or creating a release tests must be successful.
 Agent-positive. The agent creates commits and merges code using its own name.
 Human-decides. Only the human merges (runs "git flow finish").
+Human-defaults. The repo stays immediately usable for humans.
 
 **Agentic Knowledge**:
 Knowledge goes as graph database into .agentic/. Every folder in there gets a README.md index, linking to subfolders.
