@@ -7,6 +7,7 @@ Technical implementation details of the PID calibration system.
 ## Documents
 
 - [DUAL_LOOP_IMPLEMENTATION.md](DUAL_LOOP_IMPLEMENTATION.md) - Complete dual-loop system (current)
+- [SIMPLEFOC_STUDIO_PLAN.md](SIMPLEFOC_STUDIO_PLAN.md) - SimpleFOC Studio GUI integration (planned)
 - [CALIBRATION_PLAN.md](CALIBRATION_PLAN.md) - Future enhancements plan
 
 ---
