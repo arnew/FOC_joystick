@@ -8,6 +8,7 @@ System design, build procedures, and code style guidelines.
 
 - [PLANNING.md](PLANNING.md) - 6-phase implementation architecture
 - [QUICKSTART.md](QUICKSTART.md) - Build, upload, test instructions
+- [REFACTORING_PLAN.md](REFACTORING_PLAN.md) - Code cleanup & modularization plan
 
 ---
 
