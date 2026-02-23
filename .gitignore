@@ -5,5 +5,12 @@
 .vscode/ipch
 AGENTS.md
 .vscode/extensions.json
-**/__pycache__/*.pyc
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
 
