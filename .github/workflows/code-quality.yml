@@ -1,0 +1,51 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [dev, feature/*]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  function-size-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check function sizes (AGENTS.md compliance)
+        run: |
+          awk '
+          /^[a-zA-Z_].*\(.*\).*\{?$/ {
+            if (fname != "") {
+              len = NR - line - 1
+              if (len > 0 && len > 43) {
+                printf "FAIL: %s:%d - %s (%d lines, max 43)\n", FILENAME, line, fname, len
+                fail = 1
+              }
+            }
+            fname = $0
+            gsub(/\{$/, "", fname)
+            line = NR
+          }
+          /^\}$/ {
+            if (fname != "") {
+              len = NR - line - 1
+              if (len > 43) {
+                printf "FAIL: %s:%d - %s (%d lines, max 43)\n", FILENAME, line, fname, len
+                fail = 1
+              }
+              fname = ""
+            }
+          }
+          END {
+            if (fail) exit 1
+            print "PASS: All functions ≤43 lines (AGENTS.md compliant)"
+          }
+          ' src/*.cpp
+      
+      - name: Check code compilation
+        run: |
+          pip install platformio
+          platformio run -e pico_1motor_endless
