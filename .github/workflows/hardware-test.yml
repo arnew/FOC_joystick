@@ -19,10 +19,11 @@ jobs:
           python3 --version
           which python3
       
-      - name: Install dependencies
+      - name: Check dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install platformio pyserial pygame
+          python3 -c "import platformio" 2>/dev/null && echo "✓ platformio installed" || echo "✗ platformio missing"
+          python3 -c "import serial" 2>/dev/null && echo "✓ pyserial installed" || echo "✗ pyserial missing"
+          python3 -c "import pygame" 2>/dev/null && echo "✓ pygame installed" || echo "✗ pygame missing"
       
       - name: Build firmware
         run: |

@@ -45,21 +45,27 @@ This repository uses a self-hosted GitHub runner with attached RP2040 hardware f
 
 1. **GitHub Settings** → **Actions** → **Runners** → **New self-hosted runner**
 2. Follow setup instructions for Linux
-3. Install dependencies:
+3. Install dependencies (system-wide, not pip):
    ```bash
    sudo apt-get update
-   sudo apt-get install python3 python3-pip
-   pip3 install platformio pyserial pygame
+   sudo apt-get install python3 python3-pip python3-serial python3-pygame
+   
+   # Install PlatformIO with --break-system-packages or --user
+   python3 -m pip install --user platformio
+   # OR add to PATH: export PATH="$HOME/.local/bin:$PATH"
    ```
 4. Add user to `dialout` group for serial access:
    ```bash
    sudo usermod -a -G dialout $USER
+   # Log out and back in for group change to take effect
    ```
 5. Connect RP2040 device to `/dev/ttyACM0`
 6. Start runner:
    ```bash
    ./run.sh
    ```
+
+**Note**: Dependencies must be pre-installed on the self-hosted runner. The workflow verifies but does not install packages (to avoid PEP 668 externally-managed environment issues).
 
 ### Environment Variables
 
