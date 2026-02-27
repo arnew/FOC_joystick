@@ -503,21 +503,53 @@ class HIDControllerTestSuite:
             self.results.append(("Motor Sweep", False, "Angles not readable"))
             return False
         
-        # Tolerant validation for real hardware:
-        # require meaningful excursion; direction can be noisy due backlash, settling, and wrap.
+        # Validate that motor tracks different MIDI commands to distinct positions
         angles = [p[1] for p in positions]
         excursion = max(angles) - min(angles)
-
-        if excursion >= 0.06:
-            print("✓ PASS: Motor responds across sweep range")
-            self.results.append(("Motor Sweep", True, None))
-            return True
-        else:
-            print("✗ FAIL: Sweep response too weak or inconsistent")
-            print(f"  Angles: {angles}")
-            print(f"  Excursion: {excursion:.4f} rad")
-            self.results.append(("Motor Sweep", False, "Insufficient sweep response"))
+        
+        # Check 1: Minimum excursion (motor must actually move)
+        if excursion < 0.06:
+            print("✗ FAIL: Sweep response too weak")
+            print(f"  Excursion: {excursion:.4f} rad (need >= 0.06)")
+            self.results.append(("Motor Sweep", False, "Insufficient excursion"))
             return False
+        
+        # Check 2: Verify position changes between commands (not stuck at one point)
+        unique_positions = len(set(round(a, 3) for a in angles))  # 1mm resolution
+        if unique_positions < 3:
+            print("✗ FAIL: Motor not responding to different MIDI values")
+            print(f"  Only {unique_positions} distinct positions detected")
+            print(f"  Angles: {angles}")
+            self.results.append(("Motor Sweep", False, "Motor not tracking commands"))
+            return False
+        
+        # Check 3: Verify positions correlate with MIDI values (monotonic trend)
+        # Sort by MIDI value and check angle progression
+        sorted_pos = sorted(positions, key=lambda x: x[0])
+        sorted_angles = [p[1] for p in sorted_pos]
+        
+        # Count direction changes (should be mostly monotonic)
+        direction_changes = 0
+        for i in range(len(sorted_angles) - 1):
+            if i > 0:
+                prev_dir = sorted_angles[i] - sorted_angles[i-1]
+                curr_dir = sorted_angles[i+1] - sorted_angles[i]
+                if abs(prev_dir) > 0.01 and abs(curr_dir) > 0.01:  # Ignore noise
+                    if (prev_dir > 0) != (curr_dir > 0):
+                        direction_changes += 1
+        
+        # Allow at most 1 direction change (for backlash/noise at endpoints)
+        if direction_changes > 1:
+            print("✗ FAIL: Motor positions not monotonic with MIDI values")
+            print(f"  Direction changes: {direction_changes} (expected <= 1)")
+            print(f"  Sorted positions: {sorted_pos}")
+            self.results.append(("Motor Sweep", False, "Non-monotonic response"))
+            return False
+        
+        print(f"✓ PASS: Motor tracks sweep range")
+        print(f"  Excursion: {excursion:.4f} rad, {unique_positions} distinct positions")
+        self.results.append(("Motor Sweep", True, None))
+        return True
 
     def test_motor_dynamics_highspeed(self):
         """Test 5b (Optional): High-speed motor dynamics capture (100+ Hz)
