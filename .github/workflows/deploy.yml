@@ -10,8 +10,6 @@ on:
         type: choice
         options:
           - pico_1motor_endless
-          - pico_1motor_limited
-          - pico_2motor_limited
       force_manual_bootsel:
         description: 'Skip automatic reset (require manual BOOTSEL button)'
         required: false

@@ -1,7 +1,7 @@
 /**
  * motor_control.h - SimpleFOC Motor Control Module
  * 
- * Handles dual BLDC motor control with SimpleFOC:
+ * Handles single BLDC motor control with SimpleFOC:
  * - Motor initialization
  * - FOC loop execution
  * - Angle control and limits
@@ -23,21 +23,16 @@ extern MagneticSensorI2C sensor0;
 extern BLDCMotor motor0;
 extern BLDCDriver3PWM driver0;
 
-#if NUM_MOTORS > 1
-extern BLDCMotor motor1;
-extern BLDCDriver3PWM driver1;
-#endif
-
-extern BLDCMotor* motors[2];
-extern BLDCDriver3PWM* drivers[2];
-extern MagneticSensorI2C* sensors[2];
+extern BLDCMotor* motors[1];
+extern BLDCDriver3PWM* drivers[1];
+extern MagneticSensorI2C* sensors[1];
 
 // ============================================================================
 // MOTOR STATE
 // ============================================================================
 
-extern float target_angle[2];
-extern float current_angle[2];
+extern float target_angle[1];
+extern float current_angle[1];
 extern uint8_t active_motor;
 
 // ============================================================================

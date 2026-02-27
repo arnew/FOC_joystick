@@ -13,44 +13,24 @@ MagneticSensorI2C sensor0 = MagneticSensorI2C(AS5600_I2C);
 BLDCMotor motor0(7);  // 7 pole pairs
 BLDCDriver3PWM driver0(13, 12, 11, 10);
 
-#if NUM_MOTORS > 1
-BLDCMotor motor1(7);
-BLDCDriver3PWM driver1(13, 12, 11, 10);
-#endif
-
-BLDCMotor* motors[2] = {
-  &motor0,
-#if NUM_MOTORS > 1
-  &motor1
-#else
-  nullptr
-#endif
+BLDCMotor* motors[1] = {
+  &motor0
 };
 
-BLDCDriver3PWM* drivers[2] = {
-  &driver0,
-#if NUM_MOTORS > 1
-  &driver1
-#else
-  nullptr
-#endif
+BLDCDriver3PWM* drivers[1] = {
+  &driver0
 };
 
-MagneticSensorI2C* sensors[2] = {
-  &sensor0,
-#if NUM_MOTORS > 1
-  &sensor0  // TODO: Add sensor1
-#else
-  nullptr
-#endif
+MagneticSensorI2C* sensors[1] = {
+  &sensor0
 };
 
 // ============================================================================
 // MOTOR STATE VARIABLES
 // ============================================================================
 
-float target_angle[2] = {0.0f, 0.0f};
-float current_angle[2] = {0.0f, 0.0f};
+float target_angle[1] = {0.0f};
+float current_angle[1] = {0.0f};
 uint8_t active_motor = 0;
 
 // ============================================================================

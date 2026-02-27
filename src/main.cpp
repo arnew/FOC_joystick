@@ -22,10 +22,6 @@
 #include "motor_control.h"
 #include "midi_handler.h"
 #include "usb_hid.h"
-#include "commander_integration.h"
-
-// RP2040 bootloader reentry support (DTR-on-reset)
-#include <pico/bootrom.h>
 
 // Magic bootloader reentry address for RP2040
 // When the host does a 1200bps reset (DTR toggle), this code detects it
@@ -57,9 +53,6 @@ void setup() {
   // Initialize MIDI handler
   init_midi_handler();
   
-  // Initialize SimpleFOC Commander
-  init_commander();
-  
   // Print configuration
   Serial.println("\n=== Loaded Configuration ===");
   Serial.print("Axes: ");
@@ -85,8 +78,6 @@ void setup() {
 // ============================================================================
 
 void loop() {
-  // DTR bootloader reentry is handled by TinyUSB CDC callback
-  
   // 1. FOC control (~1kHz)
   update_motor(0);
   
@@ -94,9 +85,6 @@ void loop() {
   while (usb_midi.available()) {
     handle_midi_byte(usb_midi.read());
   }
-  
-  // 3. SimpleFOC Commander (tuning)
-  update_commander();
   
   // 4. USB HID output (~100Hz)
   static unsigned long last_hid = 0;

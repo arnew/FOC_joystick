@@ -14,8 +14,6 @@ jobs:
       matrix:
         environment:
           - pico_1motor_endless
-          - pico_1motor_limited
-          - pico_2motor_limited
       fail-fast: false
 
     steps:

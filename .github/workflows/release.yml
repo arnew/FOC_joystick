@@ -77,8 +77,6 @@ jobs:
       matrix:
         environment:
           - pico_1motor_endless
-          - pico_1motor_limited
-          - pico_2motor_limited
     
     steps:
       - name: Checkout code
@@ -167,8 +165,6 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Firmware binaries uploaded for:" >> $GITHUB_STEP_SUMMARY
             echo "- pico_1motor_endless" >> $GITHUB_STEP_SUMMARY
-            echo "- pico_1motor_limited" >> $GITHUB_STEP_SUMMARY
-            echo "- pico_2motor_limited" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Release build failed" >> $GITHUB_STEP_SUMMARY
           fi
