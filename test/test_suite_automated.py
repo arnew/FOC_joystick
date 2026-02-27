@@ -181,23 +181,34 @@ class HIDControllerTestSuite:
             midi_found = False
             if PYGAME_MIDI_AVAILABLE:
                 try:
+                    print(f"  Scanning for USB MIDI devices ({pygame.midi.get_count()} total):")
                     for i in range(pygame.midi.get_count()):
                         info = pygame.midi.get_device_info(i)
-                        # Look for "Pico MIDI" output port (mode 0 = output)
-                        if b"Pico" in info[1] and info[4] == 0:  # mode 0 = output
+                        # info = (interf, name, input, output, opened)
+                        # name = device name bytes, output (info[3]) = 1 if device can receive
+                        device_name = info[1].decode('utf-8', errors='ignore')
+                        is_output = info[3] == 1
+                        print(f"    [{i}] {device_name} {'(OUT)' if is_output else '(IN)'}")
+                        
+                        # Look for RP2040 MIDI output port (to send to device)
+                        # Check for common RP2040/Pico MIDI names
+                        if is_output and any(keyword in device_name.lower() for keyword in ['pico', 'rp2040', 'tinyusb', 'midi']):
                             self.midi_output = pygame.midi.Output(i)
-                            print(f"✓ Native USB MIDI: {info[1].decode()} (pygame.midi output)")
+                            print(f"✓ Native USB MIDI: {device_name} (pygame.midi)")
                             midi_found = True
                             break
                 except Exception as e:
-                    print(f"⚠ Native USB MIDI initialization failed: {e}")
+                    print(f"⚠ Native USB MIDI scan failed: {e}")
             
             if not midi_found:
                 # Fallback: try serial MIDI if available (for backwards compatibility)
                 if self.midi_port:
                     try:
                         self.midi_ser = serial.Serial(self.midi_port, 31250, timeout=2)
-                        print(f"✓ MIDI serial (fallback): {self.midi_port} @ 31250 baud")
+                        print(f"⚠ MIDI serial (fallback): {self.midi_port} @ 31250 baud")
+                        print(f"  WARNING: Firmware may not handle serial MIDI - USB MIDI preferred!")
+                    except Exception as e:
+                        print(f"✗ MIDI serial fallback failed: {e}")
                         midi_found = True
                     except:
                         pass
