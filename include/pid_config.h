@@ -18,14 +18,14 @@
 // Motor 0 PID Gains (Angle Controller)
 // Based on SimpleFOC defaults.h for RP2040 (non-AVR controller)
 // DEF_P_ANGLE_P = 20.0f (SimpleFOC default angle P controller)
-#define MOTOR0_PID_P  20.0f   // Proportional gain (SimpleFOC default for angle control)
+#define MOTOR0_PID_P  20.0f*0.5   // Proportional gain (SimpleFOC default for angle control)
 #define MOTOR0_PID_I  0.0f    // Integral gain (angular position, usually minimal)
 #define MOTOR0_PID_D  0.5f    // Derivative gain (damping, reduces oscillation)
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
 // Based on SimpleFOC defaults: DEF_PID_VEL_P=0.5f, DEF_PID_VEL_I=10.0f, DEF_PID_VEL_D=0.0f
 #define MOTOR0_VELOCITY_P  0.5f*0.25   // P for velocity loop (SimpleFOC default)
-#define MOTOR0_VELOCITY_I  10.0f  // I for velocity loop (SimpleFOC default, reduces steady-state error)
+#define MOTOR0_VELOCITY_I  10.0f*0.0  // I for velocity loop (SimpleFOC default, reduces steady-state error)
 #define MOTOR0_VELOCITY_D  0.0f   // D for velocity loop
 
 // Motor 0 Voltage & Current Limits
