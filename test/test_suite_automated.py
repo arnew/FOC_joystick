@@ -478,15 +478,20 @@ class HIDControllerTestSuite:
             self.results.append(("Motor Sweep", None, "MIDI port unavailable"))
             return None
         
-        print("Sending MIDI CC#64 sweep: 0 → 127…")
+        print("Sending MIDI CC#64 sweep in limited range (test compatibility)…")
         
         positions = []
-        for cc_val in [0, 32, 64, 96, 127]:
+        # Test limited range (0-64) to avoid wrapping issues with endless motors
+        # This maps to 0-180° range, testable for both motor types
+        test_values = [0, 16, 32, 48, 64]
+        
+        for cc_val in test_values:
             self.send_midi_cc(64, cc_val)
-            time.sleep(0.3)
+            time.sleep(0.8)  # Longer settle time for motor movement
             
             # Read the angle (support both old and new format)
             lines = self.read_debug_lines(timeout=0.5)
+            angle_found = False
             for line in lines:
                 match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)
                 if not match:
@@ -496,7 +501,15 @@ class HIDControllerTestSuite:
                     positions.append((cc_val, angle))
                     angle_deg = angle * 180 / 3.14159
                     print(f"  CC#64={cc_val:3d} → Angle={angle:7.4f} rad ({angle_deg:6.1f}°)")
+                    angle_found = True
                     break
+            
+            if not angle_found:
+                print(f"  CC#64={cc_val:3d} → No angle reading")
+                # Try to read MIDI debug to see if command was received
+                for line in lines:
+                    if 'MIDI' in line:
+                        print(f"    Debug: {line.strip()}")
         
         if len(positions) < 3:
             print("✗ FAIL: Could not read sufficient angles during sweep")
