@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build-and-deploy:
+    name: Build & Deploy Firmware
     runs-on: [self-hosted, hardware]
     
     steps:
@@ -88,10 +89,23 @@ jobs:
           echo "ERROR: /dev/ttyACM0 not present after upload"
           ls -l /dev/ttyACM* || true
           exit 1
+
+  test-connectivity:
+    name: Test - System Connectivity
+    needs: [build-and-deploy]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       
-      - name: Run hardware tests
+      - name: Setup Python venv
         run: |
-          bash ./test/run_ci_tests.sh
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Run connectivity test
+        run: bash ./test/run_ci_tests.sh connectivity
         env:
           SERIAL_PORT: /dev/ttyACM0
       
@@ -99,7 +113,124 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ github.sha }}
+          name: test-connectivity-${{ github.run_number }}
           path: |
-            test/*.log
-            test/*.json
+            test/ci_hardware_test.log
+            test/ci_hardware_test.json
+          retention-days: 30
+
+  test-position:
+    name: Test - Motor Position
+    needs: [build-and-deploy]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Run position test
+        run: bash ./test/run_ci_tests.sh position
+        env:
+          SERIAL_PORT: /dev/ttyACM0
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-position-${{ github.run_number }}
+          path: |
+            test/ci_hardware_test.log
+            test/ci_hardware_test.json
+          retention-days: 30
+
+  test-midi:
+    name: Test - MIDI Response
+    needs: [build-and-deploy]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Run MIDI test
+        run: bash ./test/run_ci_tests.sh midi
+        env:
+          SERIAL_PORT: /dev/ttyACM0
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-midi-${{ github.run_number }}
+          path: |
+            test/ci_hardware_test.log
+            test/ci_hardware_test.json
+          retention-days: 30
+
+  test-sweep:
+    name: Test - Motor Sweep
+    needs: [build-and-deploy]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Run sweep test
+        run: bash ./test/run_ci_tests.sh sweep
+        env:
+          SERIAL_PORT: /dev/ttyACM0
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-sweep-${{ github.run_number }}
+          path: |
+            test/ci_hardware_test.log
+            test/ci_hardware_test.json
+          retention-days: 30
+
+  test-scaling:
+    name: Test - Joystick Scaling
+    needs: [build-and-deploy]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Run scaling test
+        run: bash ./test/run_ci_tests.sh scaling
+        env:
+          SERIAL_PORT: /dev/ttyACM0
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-scaling-${{ github.run_number }}
+          path: |
+            test/ci_hardware_test.log
+            test/ci_hardware_test.json
+          retention-days: 30
