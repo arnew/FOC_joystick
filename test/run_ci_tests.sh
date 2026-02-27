@@ -5,6 +5,7 @@
 set -e
 
 SERIAL_PORT=${SERIAL_PORT:-/dev/ttyACM0}
+MIDI_PORT=${MIDI_PORT:-}
 TEST_DIR=$(dirname "$0")
 
 echo "=== Hardware Test Suite ==="
@@ -28,7 +29,11 @@ fi
 
 # Run automated test suite
 cd "$TEST_DIR"
-python3 test_suite_automated.py --port "$SERIAL_PORT" --timeout 60
+if [ -n "$MIDI_PORT" ]; then
+    python3 test_suite_automated.py --debug-port "$SERIAL_PORT" --midi-port "$MIDI_PORT"
+else
+    python3 test_suite_automated.py --debug-port "$SERIAL_PORT"
+fi
 
 echo ""
 echo "=== All tests passed ==="
