@@ -35,15 +35,12 @@ jobs:
 
       - name: Install PlatformIO
         run: |
-          if ! command -v platformio &> /dev/null; then
-            # Install globally with --break-system-packages for Python 3.13+ on Debian/Ubuntu
-            python3 -m pip install --break-system-packages platformio
-          fi
-          platformio --version
+          python3 -m pip install --break-system-packages platformio
+          python3 -m platformio --version
 
       - name: Build firmware
         run: |
-          platformio run -e ${{ github.event.inputs.environment }}
+          python3 -m platformio run -e ${{ github.event.inputs.environment }}
           echo "## Build Results" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: \`${{ github.event.inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
           
@@ -67,7 +64,7 @@ jobs:
           fi
           
           # Attempt upload
-          if platformio run -e ${{ github.event.inputs.environment }} --target upload; then
+          if python3 -m platformio run -e ${{ github.event.inputs.environment }} --target upload; then
             echo "upload_status=success" >> $GITHUB_OUTPUT
             echo "✅ Firmware uploaded successfully" >> $GITHUB_STEP_SUMMARY
           else
