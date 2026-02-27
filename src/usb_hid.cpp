@@ -121,10 +121,10 @@ uint16_t angle_to_joystick_value(
   
   // Apply axis reversal
   for (uint8_t i = 0; 
-       i < NUM_A320_AXES; i++) {
-    if (A320_CONFIG[i].motor_id == 
+       i < NUM_ACTIVE_AXES; i++) {
+    if (ACTIVE_CONFIG[i].motor_id == 
         motor_id) {
-      if (A320_CONFIG[i].reversed) {
+      if (ACTIVE_CONFIG[i].reversed) {
         normalized = 1.0f - normalized;
       }
       break;

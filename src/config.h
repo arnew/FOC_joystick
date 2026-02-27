@@ -30,13 +30,11 @@ struct AxisProfile {
 };
 
 // ============================================================================
-// CONFIGURATION: Single Endless Motor (Tested & Proven)
+// MOTOR PROFILES
 // ============================================================================
-// Only pico_1motor_endless is tested. Other configs (limited, dual motors)
-// were untested and have been removed.
-// See .agentic/REMOVED_UNTESTED_CODE.md for details.
+// Hardware-dependent configurations for different motor types
 
-static const MotorProfile MOTOR_0 = {
+static const MotorProfile MOTOR_0_ENDLESS = {
   .id = 0,
   .min_angle = 0.0f,
   .max_angle = 6.28318f,  // 360 degrees in radians (endless)
@@ -45,18 +43,162 @@ static const MotorProfile MOTOR_0 = {
   .label = "Motor 0 (Endless Trim)"
 };
 
+static const MotorProfile MOTOR_0_LIMITED = {
+  .id = 0,
+  .min_angle = 0.0f,
+  .max_angle = 3.14159f,  // 180 degrees in radians (limited range)
+  .is_endless = false,
+  .voltage_limit = 2.0f,
+  .label = "Motor 0 (Limited 0-180°)"
+};
+
+// ============================================================================
+// AIRBUS A320 CONFIGURATION
+// ============================================================================
+// MIDI CC mappings for Airbus A320 flight controls
+// Note: With single-motor hardware, only ONE axis is active at a time.
+// Set MIDI CC sender to control the desired axis.
+//
+// Aircraft Controls (with typical MIDI CC assignments):
+// - CC#7  → Throttle (0-100%, limited 0-180°)
+// - CC#11 → Flaps (discrete: 0,1,2,3,Full - represented as 0-180°)
+// - CC#64 → Trim (endless -100% to +100%)
+// - CC#2  → Spoilers (0-100%, limited 0-180°)
+// - CC#32 → Landing Gear (0-100%, limited 0-180°, with detents)
+
 static const AxisProfile A320_CONFIG[] = {
   {
     .motor_id = 0,
-    .midi_cc = 64,          // Sustain pedal CC (trim-like control)
-    .label = "Trim",
+    .midi_cc = 7,           // Throttle
+    .label = "A320 Throttle",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 11,          // Flaps
+    .label = "A320 Flaps",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 64,          // Trim (Sustain pedal)
+    .label = "A320 Trim",
     .reversed = false,
     .scaling_factor = 2.0f,
-    .motor = MOTOR_0
+    .motor = MOTOR_0_ENDLESS
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 2,           // Spoilers
+    .label = "A320 Spoilers",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 32,          // Landing Gear
+    .label = "A320 Landing Gear",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
   }
 };
 
 #define NUM_A320_AXES (sizeof(A320_CONFIG) / sizeof(AxisProfile))
+
+// ============================================================================
+// CESSNA 172 CONFIGURATION
+// ============================================================================
+// MIDI CC mappings for Cessna 172 flight controls
+// With single-motor hardware: Set sender to control one axis at a time
+//
+// Aircraft Controls (with standard Flight Sim MIDI assignments):
+// - CC#7  → Throttle (0-100%, limited 0-180°)
+// - CC#5  → Flaps (typically 5 positions, represented as 0-180°)
+// - CC#64 → Trim (endless -100% to +100%)
+// - CC#35 → Landing Gear (0-100%, limited 0-180°)
+
+static const AxisProfile CESSNA_CONFIG[] = {
+  {
+    .motor_id = 0,
+    .midi_cc = 7,           // Throttle
+    .label = "Cessna Throttle",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 5,           // Flaps
+    .label = "Cessna Flaps",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 64,          // Trim
+    .label = "Cessna Trim",
+    .reversed = false,
+    .scaling_factor = 2.0f,
+    .motor = MOTOR_0_ENDLESS
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 35,          // Landing Gear
+    .label = "Cessna Landing Gear",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  }
+};
+
+#define NUM_CESSNA_AXES (sizeof(CESSNA_CONFIG) / sizeof(AxisProfile))
+
+// ============================================================================
+// GLIDER CONFIGURATION
+// ============================================================================
+// MIDI CC mappings for Glider flight controls
+// With single-motor hardware: Set sender to control one axis at a time
+//
+// Aircraft Controls:
+// - CC#2  → Spoilers/Airbrakes (0-100%, limited 0-180°)
+// - CC#64 → Trim (endless -100% to +100%)
+
+static const AxisProfile GLIDER_CONFIG[] = {
+  {
+    .motor_id = 0,
+    .midi_cc = 2,           // Spoilers/Airbrakes
+    .label = "Glider Spoilers",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0_LIMITED
+  },
+  {
+    .motor_id = 0,
+    .midi_cc = 64,          // Trim
+    .label = "Glider Trim",
+    .reversed = false,
+    .scaling_factor = 2.0f,
+    .motor = MOTOR_0_ENDLESS
+  }
+};
+
+#define NUM_GLIDER_AXES (sizeof(GLIDER_CONFIG) / sizeof(AxisProfile))
+
+// ============================================================================
+// ACTIVE CONFIGURATION
+// ============================================================================
+// Currently using A320 profile by default
+// To switch profiles at compile time, change the following:
+#define ACTIVE_CONFIG A320_CONFIG
+#define NUM_ACTIVE_AXES NUM_A320_AXES
+
 #define NUM_MOTORS 1
 
 // ============================================================================
@@ -69,9 +211,9 @@ static const AxisProfile A320_CONFIG[] = {
  * @return Pointer to AxisProfile if found, NULL otherwise
  */
 static inline const AxisProfile* find_axis_by_cc(uint8_t midi_cc) {
-  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
-    if (A320_CONFIG[i].midi_cc == midi_cc) {
-      return &A320_CONFIG[i];
+  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
+    if (ACTIVE_CONFIG[i].midi_cc == midi_cc) {
+      return &ACTIVE_CONFIG[i];
     }
   }
   return NULL;
@@ -83,7 +225,7 @@ static inline const AxisProfile* find_axis_by_cc(uint8_t midi_cc) {
  * @return Pointer to MotorProfile if valid, NULL otherwise
  */
 static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
-  if (motor_id == 0) return &MOTOR_0;
+  if (motor_id == 0) return &MOTOR_0_ENDLESS;
   return NULL;
 }
 
@@ -93,9 +235,9 @@ static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
  * @return Pointer to first AxisProfile for motor, NULL if none found
  */
 static inline const AxisProfile* find_axis_by_motor(uint8_t motor_id) {
-  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
-    if (A320_CONFIG[i].motor_id == motor_id) {
-      return &A320_CONFIG[i];
+  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
+    if (ACTIVE_CONFIG[i].motor_id == motor_id) {
+      return &ACTIVE_CONFIG[i];
     }
   }
   return NULL;
@@ -108,8 +250,8 @@ static inline const AxisProfile* find_axis_by_motor(uint8_t motor_id) {
  */
 static inline uint8_t count_axes_for_motor(uint8_t motor_id) {
   uint8_t count = 0;
-  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
-    if (A320_CONFIG[i].motor_id == motor_id) {
+  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
+    if (ACTIVE_CONFIG[i].motor_id == motor_id) {
       count++;
     }
   }

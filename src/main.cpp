@@ -124,17 +124,17 @@ void setup() {
   // Print configuration
   Serial.println("\n=== Loaded Configuration ===");
   Serial.print("Axes: ");
-  Serial.println(NUM_A320_AXES);
+  Serial.println(NUM_ACTIVE_AXES);
   
-  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
+  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
     Serial.print("  ");
     Serial.print(i);
     Serial.print(": ");
-    Serial.print(A320_CONFIG[i].label);
+    Serial.print(ACTIVE_CONFIG[i].label);
     Serial.print(" (M");
-    Serial.print(A320_CONFIG[i].motor_id);
+    Serial.print(ACTIVE_CONFIG[i].motor_id);
     Serial.print(", CC#");
-    Serial.print(A320_CONFIG[i].midi_cc);
+    Serial.print(ACTIVE_CONFIG[i].midi_cc);
     Serial.println(")");
   }
   
