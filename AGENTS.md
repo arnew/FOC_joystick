@@ -8,6 +8,7 @@ UNIX - KISS:
     - One tool, one job. 
     - Build Orthogonal Tools that support composing. 
     - Don't try to be clever.
+    - If you catch yourself building epicycles, switch your point of view.
 Only mandatory inventions. When stuff is already available, use the lib, tool, whatever.
 Functions stay small, ideally fit on one monitor page (80x25 to 132x43).
 
