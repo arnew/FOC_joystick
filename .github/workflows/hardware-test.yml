@@ -16,29 +16,50 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Verify Python
+      - name: Try to download artifact from Build workflow
+        id: download-build-artifact
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build.yml
+          name: firmware-pico_1motor_endless
+          path: ./build-artifact/
+          search_artifacts: true
+          if_no_artifact_found: warn
+      
+      - name: Check if we need to build
+        id: check-build
         run: |
-          python3 --version
-          which python3
+          if [ -f ./build-artifact/firmware.uf2 ]; then
+            echo "✓ Found firmware from Build workflow (3x faster, ubuntu-latest)"
+            echo "need_build=false" >> $GITHUB_OUTPUT
+            mkdir -p .pio/build/pico_1motor_endless/
+            cp ./build-artifact/firmware.uf2 .pio/build/pico_1motor_endless/
+          else
+            echo "⚠ No Build workflow artifact found, building locally on hardware runner"
+            echo "need_build=true" >> $GITHUB_OUTPUT
+          fi
       
       - name: Setup Python venv
+        if: steps.check-build.outputs.need_build == 'true'
         run: |
           python3 -m venv $HOME/ci-venv || true
           echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
       
       - name: Install dependencies
+        if: steps.check-build.outputs.need_build == 'true'
         run: |
           pip install --upgrade pip
           pip install platformio pyserial pygame
-          which platformio && echo "✓ platformio" || { echo "✗ platformio missing"; exit 1; }
       
-      - name: Build firmware
+      - name: Build firmware locally
+        if: steps.check-build.outputs.need_build == 'true'
         run: platformio run -e pico_1motor_endless
       
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ github.run_number }}
+          name: firmware-hw-test-${{ github.run_number }}
           path: .pio/build/pico_1motor_endless/firmware.uf2
           retention-days: 7
 
@@ -51,7 +72,7 @@ jobs:
       - name: Download firmware artifact
         uses: actions/download-artifact@v4
         with:
-          name: firmware-${{ github.run_number }}
+          name: firmware-hw-test-${{ github.run_number }}
           path: ./
 
       - name: Unmount RP2040 BOOTSEL volume (if mounted)
@@ -90,11 +111,12 @@ jobs:
       - name: Upload firmware to device with picotool
         run: |
           ls -lh firmware.uf2
-          picotool load -f -v -x firmware.uf2 || {
+          PICOTOOL="$HOME/.platformio/packages/tool-picotool-rp2040-earlephilhower/picotool"
+          $PICOTOOL load -f -v -x firmware.uf2 || {
             echo "Upload failed once; retrying after short settle..."
             sleep 2
             udevadm settle || true
-            picotool load -f -v -x firmware.uf2
+            $PICOTOOL load -f -v -x firmware.uf2
           }
       
       - name: Wait for device reset
