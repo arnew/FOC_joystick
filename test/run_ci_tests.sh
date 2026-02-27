@@ -10,6 +10,14 @@ TEST_DIR=$(dirname "$0")
 echo "=== Hardware Test Suite ==="
 echo "Serial port: $SERIAL_PORT"
 echo "Test directory: $TEST_DIR"
+
+# Activate venv if it exists (CI environment)
+if [ -f "$HOME/ci-venv/bin/activate" ]; then
+    echo "Activating CI venv..."
+    source "$HOME/ci-venv/bin/activate"
+    python3 --version
+fi
+
 echo ""
 
 # Check device is connected
