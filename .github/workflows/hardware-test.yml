@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
-    name: Build & Deploy Firmware
+  build:
+    name: Build Firmware
     runs-on: [self-hosted, hardware]
     
     steps:
@@ -34,6 +34,38 @@ jobs:
       
       - name: Build firmware
         run: platformio run -e pico_1motor_endless
+      
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.run_number }}
+          path: .pio/build/pico_1motor_endless/firmware.uf2
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Device
+    needs: [build]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Install platformio
+        run: |
+          pip install --upgrade pip
+          pip install platformio
+      
+      - name: Download firmware artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ github.run_number }}
+          path: .pio/build/pico_1motor_endless/
 
       - name: Unmount RP2040 BOOTSEL volume (if mounted)
         run: |
@@ -92,7 +124,7 @@ jobs:
 
   test-connectivity:
     name: Test - System Connectivity
-    needs: [build-and-deploy]
+    needs: [deploy]
     runs-on: [self-hosted, hardware]
     
     steps:
@@ -121,7 +153,7 @@ jobs:
 
   test-position:
     name: Test - Motor Position
-    needs: [build-and-deploy]
+    needs: [deploy]
     runs-on: [self-hosted, hardware]
     
     steps:
@@ -150,7 +182,7 @@ jobs:
 
   test-midi:
     name: Test - MIDI Response
-    needs: [build-and-deploy]
+    needs: [deploy]
     runs-on: [self-hosted, hardware]
     
     steps:
@@ -179,7 +211,7 @@ jobs:
 
   test-sweep:
     name: Test - Motor Sweep
-    needs: [build-and-deploy]
+    needs: [deploy]
     runs-on: [self-hosted, hardware]
     
     steps:
@@ -208,7 +240,7 @@ jobs:
 
   test-scaling:
     name: Test - Joystick Scaling
-    needs: [build-and-deploy]
+    needs: [deploy]
     runs-on: [self-hosted, hardware]
     
     steps:
