@@ -8,15 +8,54 @@ Tools and workflows for automated testing, cloud validation, and agentic GitHub 
 
 ## Current Infrastructure
 
-**Workflows** (3 tiers):
+**Workflows** (3 tiers + 1 manual):
 - **Code Quality** (`ubuntu-latest`): function size check + PIO build
 - **Headless Test** (`ubuntu-latest`): pytest unit tests, simulator, no hardware  
-- **Hardware Test** (`[self-hosted, hardware]`): build → upload → HIL tests (physical device required)
+- **Hardware Test** (`[self-hosted, hardware]`): build → upload → HIL tests (physical device required) — runs all tests on push/PR
+- **Manual Hardware Test** (`[self-hosted, hardware]`): selective test execution for rapid debugging
 
 **Tools**:
 - `gh` CLI — all GitHub operations (auth as `arnew` with `repo` scope)
 - `workflow_dispatch` — on-demand CI triggers (all workflows support this)
 - `git-flow` — branch management (feature/*, dev, main, release/*)
+
+## Rapid Iteration with Manual Tests
+
+For debugging failed tests without running the full suite:
+
+**Trigger manual test run** (GitHub web UI):
+1. Go to Actions → Manual Hardware Test
+2. Click "Run workflow"
+3. Select tests to run: `connectivity position midi scaling sweep dynamics`
+4. Optionally skip build/upload if firmware is already deployed
+
+**Trigger via CLI**:
+```bash
+# Run only MIDI and sweep tests
+gh workflow run manual-hardware-test.yml \
+  --ref dev \
+  -f tests="midi sweep"
+
+# Skip build (use existing firmware)
+gh workflow run manual-hardware-test.yml \
+  --ref dev \
+  -f tests="connectivity midi" \
+  -f skip_build=true
+```
+
+**Available tests**:
+- `connectivity` — System identification (firmware, config)
+- `position` — Motor initial position check
+- `midi` — Motor response to MIDI commands
+- `scaling` — Joystick output scaling
+- `sweep` — Motor sweep range and tracking
+- `dynamics` — High-speed dynamics (requires --enable-monitor)
+
+**Local selective testing**:
+```bash
+cd test
+./run_ci_tests.sh midi sweep  # Run only specified tests
+```
 
 ## Self-Hosted Runner Requirements
 

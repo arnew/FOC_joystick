@@ -1,0 +1,119 @@
+name: Manual Hardware Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Tests to run (space-separated: connectivity position midi scaling sweep dynamics)'
+        required: false
+        default: 'connectivity position midi scaling sweep'
+        type: string
+      skip_build:
+        description: 'Skip firmware build/upload (use existing firmware)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  manual-test:
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Verify Python
+        run: |
+          python3 --version
+          which python3
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install platformio pyserial pygame
+          which platformio && echo "✓ platformio" || { echo "✗ platformio missing"; exit 1; }
+      
+      - name: Build firmware
+        if: ${{ !inputs.skip_build }}
+        run: platformio run -e pico_1motor_endless
+
+      - name: Unmount RP2040 BOOTSEL volume (if mounted)
+        if: ${{ !inputs.skip_build }}
+        run: |
+          entries="$(lsblk -nrpo NAME,LABEL,MOUNTPOINT 2>/dev/null | awk '$2=="RPI-RP2" && $3!="" {print $1" "$3}')"
+          if [ -n "$entries" ]; then
+            echo "Found mounted RP2040 BOOTSEL volume(s):"
+            echo "$entries"
+            while read -r dev mnt; do
+              [ -n "$dev" ] || continue
+              [ -n "$mnt" ] || continue
+              echo "Unmounting $dev from $mnt"
+              umount "$mnt" || true
+            done <<< "$entries"
+            udevadm settle || true
+          else
+            echo "No mounted RPI-RP2 volume found"
+          fi
+
+      - name: Ensure upload port is free
+        if: ${{ !inputs.skip_build }}
+        run: |
+          echo "Checking upload port: /dev/ttyACM0"
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -v /dev/ttyACM0 || true
+            pids="$(fuser /dev/ttyACM0 2>/dev/null || true)"
+            if [ -n "$pids" ]; then
+              echo "Terminating processes using /dev/ttyACM0: $pids"
+              kill -TERM $pids || true
+              sleep 1
+              kill -KILL $pids || true
+            fi
+            fuser -v /dev/ttyACM0 || true
+          fi
+          udevadm settle || true
+      
+      - name: Upload firmware to device
+        if: ${{ !inputs.skip_build }}
+        run: |
+          platformio run -e pico_1motor_endless --target upload || {
+            echo "Upload failed once; retrying after short settle..."
+            sleep 2
+            udevadm settle || true
+            platformio run -e pico_1motor_endless --target upload
+          }
+      
+      - name: Wait for device reset
+        if: ${{ !inputs.skip_build }}
+        run: |
+          for i in $(seq 1 20); do
+            if [ -e /dev/ttyACM0 ]; then
+              echo "Device back on /dev/ttyACM0"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: /dev/ttyACM0 not present after upload"
+          ls -l /dev/ttyACM* || true
+          exit 1
+      
+      - name: Run selected hardware tests
+        run: |
+          echo "Running tests: ${{ inputs.tests }}"
+          bash ./test/run_ci_tests.sh ${{ inputs.tests }}
+        env:
+          SERIAL_PORT: /dev/ttyACM0
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-test-results-${{ github.run_number }}
+          path: |
+            test/ci_hardware_test.log
+            test/ci_hardware_test.json
+          retention-days: 30

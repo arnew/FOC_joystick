@@ -1,6 +1,10 @@
 #!/bin/bash
 # CI/CD Hardware Test Runner
 # Runs automated test suite on self-hosted runner with attached hardware
+#
+# Usage:
+#   ./run_ci_tests.sh                    # Run all tests
+#   ./run_ci_tests.sh midi sweep         # Run only specified tests
 
 set -eo pipefail
 
@@ -13,6 +17,9 @@ JSON_FILE=${JSON_FILE:-ci_hardware_test.json}
 echo "=== Hardware Test Suite ==="
 echo "Serial port: $SERIAL_PORT"
 echo "Test directory: $TEST_DIR"
+if [ "$#" -gt 0 ]; then
+    echo "Selected tests: $*"
+fi
 
 # Activate venv if it exists (CI environment)
 if [ -f "$HOME/ci-venv/bin/activate" ]; then
@@ -34,6 +41,10 @@ cd "$TEST_DIR"
 args=(test_suite_automated.py --debug-port "$SERIAL_PORT" --json-out "$JSON_FILE")
 if [ -n "$MIDI_PORT" ]; then
     args+=(--midi-port "$MIDI_PORT")
+fi
+# Pass through test selection if specified
+if [ "$#" -gt 0 ]; then
+    args+=(--tests "$@")
 fi
 
 set +e

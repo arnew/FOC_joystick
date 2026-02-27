@@ -677,8 +677,14 @@ class HIDControllerTestSuite:
         output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote JSON results: {output_path}")
 
-    def run_all(self, json_out=None):
-        """Run all tests"""
+    def run_all(self, json_out=None, selected_tests=None):
+        """Run all tests or selected subset
+        
+        Args:
+            json_out: Path to write JSON results
+            selected_tests: List of test names to run (e.g., ['connectivity', 'midi'])
+                           If None, runs all tests
+        """
         print("\n" + "=" * 70)
         print("USB HID JOYSTICK CONTROLLER - AUTOMATED TEST SUITE")
         print("=" * 70)
@@ -688,17 +694,44 @@ class HIDControllerTestSuite:
             self.write_results_json(json_out, False)
             return False
         
+        # Map of test names to methods
+        test_map = {
+            'connectivity': self.test_system_identification,
+            'position': self.test_motor_initial_position,
+            'midi': self.test_motor_response_to_midi,
+            'scaling': self.test_joystick_scaling,
+            'sweep': self.test_motor_sweep,
+            'dynamics': self.test_motor_dynamics_highspeed,
+        }
+        
+        # Determine which tests to run
+        if selected_tests:
+            # Validate test names
+            invalid = [t for t in selected_tests if t not in test_map]
+            if invalid:
+                print(f"ERROR: Unknown test(s): {', '.join(invalid)}")
+                print(f"Available tests: {', '.join(test_map.keys())}")
+                self.close()
+                return False
+            tests_to_run = [(name, test_map[name]) for name in selected_tests]
+            print(f"Running selected tests: {', '.join(selected_tests)}")
+        else:
+            # Run all tests
+            tests_to_run = [
+                ('connectivity', self.test_system_identification),
+                ('position', self.test_motor_initial_position),
+                ('midi', self.test_motor_response_to_midi),
+                ('scaling', self.test_joystick_scaling),
+                ('sweep', self.test_motor_sweep),
+            ]
+            # Add dynamics only if monitor enabled
+            if self.enable_monitor:
+                tests_to_run.append(('dynamics', self.test_motor_dynamics_highspeed))
+        
         try:
             # Run tests in sequence
-            self.test_system_identification()
-            self.test_motor_initial_position()
-            self.test_motor_response_to_midi()
-            self.test_joystick_scaling()
-            self.test_motor_sweep()
-            
-            # Optional high-speed monitor test (requires --enable-monitor flag)
-            if self.enable_monitor:
-                self.test_motor_dynamics_highspeed()
+            for test_name, test_method in tests_to_run:
+                test_method()
             
             # Print summary
             all_pass = self.print_results()
@@ -714,8 +747,17 @@ def main():
         description="Automated test suite for USB HID joystick controller",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  python3 test_suite_automated.py                    # Run basic tests (no monitor)
+  python3 test_suite_automated.py                    # Run all standard tests
   python3 test_suite_automated.py --enable-monitor   # Include high-speed dynamics test
+  python3 test_suite_automated.py --tests midi sweep # Run only MIDI and sweep tests
+  
+Available tests:
+  connectivity - System identification (firmware, config)
+  position     - Motor initial position check
+  midi         - Motor response to MIDI commands
+  scaling      - Joystick output scaling
+  sweep        - Motor sweep range and tracking
+  dynamics     - High-speed dynamics (requires --enable-monitor)
         """
     )
     parser.add_argument(
@@ -726,6 +768,12 @@ def main():
     parser.add_argument("--debug-port", help="Serial port for debug output")
     parser.add_argument("--midi-port", help="Serial port for MIDI input")
     parser.add_argument("--json-out", help="Write structured JSON test report to this path")
+    parser.add_argument(
+        "--tests",
+        nargs='+',
+        metavar='TEST',
+        help="Run only specified tests (e.g., --tests midi sweep)"
+    )
     
     args = parser.parse_args()
     
@@ -734,7 +782,7 @@ def main():
         midi_port=args.midi_port,
         enable_monitor=args.enable_monitor
     )
-    success = suite.run_all(json_out=args.json_out)
+    success = suite.run_all(json_out=args.json_out, selected_tests=args.tests)
     sys.exit(0 if success else 1)
 
 
