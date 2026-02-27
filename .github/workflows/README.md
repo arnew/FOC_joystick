@@ -44,7 +44,10 @@ This directory contains CI/CD workflows for the FOC Joystick project.
 ---
 
 ### 3. Hardware Integration Test (`hardware-test.yml`)
-**Trigger**: Manual dispatch OR nightly schedule (2 AM UTC)
+**Trigger**: 
+- Push to `dev` or `feature/**` branches (automatic)
+- Manual dispatch with custom parameters
+- Nightly schedule (2 AM UTC)
 
 **Purpose**: Test firmware on actual hardware (self-hosted runner with motor)
 
@@ -63,9 +66,14 @@ This directory contains CI/CD workflows for the FOC Joystick project.
 5. Check HID joystick enumeration
 6. Test motor angle tracking (if endless motor environment)
 
-**Manual trigger inputs**:
+**Auto-run behavior** (push/schedule):
+- Always tests `pico_1motor_endless` (matches runner hardware)
+- Always uploads fresh firmware
+- Provides fast feedback on each code change
+
+**Manual trigger inputs** (workflow_dispatch):
 - `environment`: Which config to test (default: pico_1motor_endless)
-- `skip_upload`: Test existing firmware without re-uploading
+- `skip_upload`: Test existing firmware without re-uploading (advanced)
 
 **Success criteria**:
 - ✅ Firmware builds

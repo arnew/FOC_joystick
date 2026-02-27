@@ -1,6 +1,10 @@
 name: Hardware Integration Test
 
 on:
+  push:
+    branches:
+      - dev
+      - feature/**
   workflow_dispatch:
     inputs:
       environment:
@@ -32,15 +36,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set environment (scheduled run default)
+      - name: Set environment (auto-run defaults)
         id: set-env
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "environment=pico_1motor_endless" >> $GITHUB_OUTPUT
-            echo "skip_upload=false" >> $GITHUB_OUTPUT
-          else
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger: use inputs
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
             echo "skip_upload=${{ github.event.inputs.skip_upload }}" >> $GITHUB_OUTPUT
+          else
+            # Push or schedule: use defaults
+            echo "environment=pico_1motor_endless" >> $GITHUB_OUTPUT
+            echo "skip_upload=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up Python
