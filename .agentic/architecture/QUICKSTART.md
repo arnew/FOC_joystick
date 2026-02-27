@@ -16,7 +16,7 @@ platformio run -e pico_1motor_endless --target upload
 
 ```bash
 # Watch motor angles and configuration at 115200 baud
-python3 test/hid_monitor.py --serial
+python3 test/debug_joystick.py
 ```
 
 You should see:
@@ -45,7 +45,7 @@ Angle: 0.0000 rad (0.0°) | Target: 0.0000 | USB: 512 (0-1023)
 ✅ **No adapter needed!** Both debug and MIDI are now over USB.
 
 ```bash
-python3 test/midi_controller.py
+python3 test/debug_midi.py
 ```
 
 The script will auto-detect both USB serial ports:
@@ -80,8 +80,8 @@ Angle: 0.0495 rad (2.8°) | Target: 0.0495 | USB: 8 (0-1023)
 platformio run -e pico_1motor_limited --target upload
 
 # Then test:
-python3 test/midi_controller.py
-# Select option 2 (Limited motor)
+python3 test/debug_midi.py
+# Send CC commands interactively
 ```
 
 ### Dual Motors
@@ -90,8 +90,8 @@ python3 test/midi_controller.py
 platformio run -e pico_2motor_limited --target upload
 
 # Then test:
-python3 test/midi_controller.py
-# Option 1 tests Motor 0 (CC#7 Throttle)
+python3 test/debug_midi.py
+# Send CC commands (e.g., cc 7 64 for throttle)
 ```
 
 ## Troubleshooting
@@ -103,9 +103,10 @@ Find available ports:
 ls /dev/tty* | grep -E "ACM|USB"
 ```
 
-Manually specify port:
+View all ports:
 ```bash
-python3 test/midi_controller.py /dev/ttyACM1
+python3 test/debug_midi.py
+# It auto-detects available ports
 ```
 
 ### Permission Denied
@@ -130,8 +131,9 @@ sudo usermod -a -G dialout $USER
 | `src/main.cpp` | Motor control loop + MIDI handler |
 | `src/config.h` | 3 hardware configurations |
 | `platformio.ini` | Build environments |
-| `test/midi_controller.py` | Send MIDI test commands |
-| `test/hid_monitor.py` | Monitor debug output |
+| `test/debug_midi.py` | Interactive MIDI command sender |
+| `test/debug_joystick.py` | Monitor debug serial output |
+| `test/test_suite_automated.py` | Automated test suite |
 | `test/test_config.cpp` | Unit tests (GoogleTest) |
 
 ## Hardware Wiring Reference

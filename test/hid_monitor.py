@@ -58,36 +58,5 @@ def monitor_joystick():
         pygame.quit()
 
 
-def monitor_serial_debug():
-    """Monitor serial debug output from RP2040"""
-    import serial
-    
-    port = "/dev/ttyACM0"  # RP2040 debug serial
-    
-    print(f"Connecting to {port} at 115200 baud...")
-    try:
-        ser = serial.Serial(port, 115200, timeout=1)
-        time.sleep(1)
-        print("Connected. Press Ctrl+C to exit.\n")
-        print("=" * 60)
-        
-        while True:
-            if ser.in_waiting:
-                line = ser.readline().decode('utf-8', errors='ignore').strip()
-                if line:
-                    print(line)
-    except serial.SerialException as e:
-        print(f"Failed to connect: {e}")
-        return False
-    except KeyboardInterrupt:
-        print("\nExit")
-        return True
-    finally:
-        ser.close()
-
-
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--serial":
-        monitor_serial_debug()
-    else:
-        monitor_joystick()
+    monitor_joystick()
