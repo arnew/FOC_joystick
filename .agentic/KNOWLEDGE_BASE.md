@@ -1,7 +1,7 @@
 # Technical Knowledge Base
 
-**Last Updated**: 2026-02-27
-**Status**: Foundation established - working baseline captured
+**Last Updated**: 2026-02-27 12:00 UTC
+**Status**: TinyUSB integration verified - both pico and pico_tinyUSB environments working
 
 ---
 
@@ -247,6 +247,58 @@ git push
 # Merge (HUMAN ONLY)
 git flow feature finish my-feature
 ```
+
+---
+
+## Experiments
+
+### TinyUSB Integration (2026-02-27)
+
+**Status**: ✅ COMPLETE - Both environments verified working
+
+**Objective**: Enable TinyUSB HID + MIDI support via new `pico_tinyUSB` build environment
+
+**Changes Made**:
+1. Added `pico_tinyUSB` environment to `platformio.ini` with TinyUSB build flags and Adafruit library dependency
+2. Updated `src/main.cpp` to include Adafruit TinyUSB headers and device declarations (HID joystick + MIDI)
+3. Created `include/my_tusb_config.h` TinyUSB configuration header:
+   - MCU: RP2040 with Pico OS
+   - Device mode with rhport0
+   - Enabled: HID (1), CDC (1), MIDI (1)
+   - Buffer sizes: 256 bytes for CDC/MIDI, 64 bytes for HID
+   - Endpoint0: 64 bytes (standard)
+4. Created comprehensive deployment test suite (`test/test_deployments.ps1`) for idempotent & transition testing
+
+**Final Test Results** (2026-02-27 12:00+ UTC):
+
+**✅ Standard pico environment**: 3/3 SUCCESS (from earlier test)
+- Idempotent deployments working reliably
+- Automatic bootloader reentry via 1200bps DTR functional
+- Flash verification passing
+- Build time: ~8-10 seconds per deployment
+
+**✅ pico_tinyUSB environment**: SUCCESS (verified 2026-02-27)
+- **Compilation**: ✅ Complete, no errors
+- **Upload**: ✅ Successful via automatic DTR bootsel reentry
+- **Build time**: ~11.8 seconds
+- **Binary size**: 64.4 KB flash (3.1%), 10.4 KB RAM (4.0%)
+- **Flash verification**: ✅ OK
+- Device rebooted successfully to application
+- Adafruit TinyUSB library v3.7.2 linked correctly
+
+**Key Discovery**:
+The blocking compilation error (`my_tusb_config.h: No such file or directory`) was resolved by creating a proper TinyUSB configuration header. The header defines device endpoints, class enablement, and buffer sizes. Without it, Adafruit TinyUSB cannot configure the USB stack.
+
+**Configuration Provided**:
+- **USB Classes**: HID joystick support + Native MIDI + CDC (serial)
+- **Buffer capacity**: 256-byte RX/TX for bandwidth, 64-byte HID for low-latency joystick reports
+- **Device descriptor**: Uses standard Pico VID (Raspberry Pi) + defaults from Adafruit library
+
+**Next Steps** (blockers removed):
+1. Implement HID joystick report sending in `loop()` 
+2. Integrate MIDI command parsing and forwarding
+3. Wire motor control outputs to joystick/MIDI events
+4. Test with actual flight simulator (X-Plane, MSFS2024, etc.)
 
 ---
 

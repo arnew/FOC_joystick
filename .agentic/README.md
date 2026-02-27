@@ -34,16 +34,25 @@
 ### Essential Reading
 1. [Project Purpose](PURPOSE.md) - Goals and success criteria
 2. [Agent Guidelines](AGENT_GUIDELINES.md) - Decision framework and anti-patterns
-3. [Technical Knowledge](KNOWLEDGE_BASE.md) - Working baseline and known issues
+3. [Technical Knowledge](KNOWLEDGE_BASE.md) - Working baseline and experiments
+
+### Recent Work
+- **Latest Experiment** (2026-02-27): [TinyUSB Integration](sessions/2026-02-27_tinyusb_integration.md) ✅ COMPLETE
+  - Both `pico` and `pico_tinyUSB` environments verified
+  - Key fix: Created `include/my_tusb_config.h`
+  - Discovery: Bootloader reentry now working (no manual BOOTSEL needed)
 
 ### Development
-- [Working Baseline](KNOWLEDGE_BASE.md#working-baseline) - Current feature/modularize-main state
-- [Known Issues](KNOWLEDGE_BASE.md#known-issues) - TinyUSB bootloader, etc.
-- [Build Commands](KNOWLEDGE_BASE.md#working-baseline) - How to compile and upload
+- [Working Baseline & Experiments](KNOWLEDGE_BASE.md#experiments) - Current status and discoveries
+- [Build Commands](KNOWLEDGE_BASE.md#working-baseline) - How to compile and upload  
+- [USB Protocol Details](KNOWLEDGE_BASE.md#usb-protocol-details) - HID & MIDI mapping
 
 ### Testing
 - [Test Strategy](KNOWLEDGE_BASE.md#testing-strategy) - Headless vs hardware tests
 - [CI/CD Pipeline](KNOWLEDGE_BASE.md#cicd-pipeline) - GitHub Actions workflows
+
+### Session History
+- [Development Sessions](sessions/) - Progress tracking and experiment summaries
 
 ---
 
