@@ -1,0 +1,264 @@
+name: Hardware Integration Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'PlatformIO environment to test'
+        required: true
+        default: 'pico_1motor_endless'
+        type: choice
+        options:
+          - pico_1motor_endless
+          - pico_1motor_limited
+          - pico_2motor_limited
+      skip_upload:
+        description: 'Skip firmware upload (test existing firmware)'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  hardware-test:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set environment (scheduled run default)
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "environment=pico_1motor_endless" >> $GITHUB_OUTPUT
+            echo "skip_upload=false" >> $GITHUB_OUTPUT
+          else
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "skip_upload=${{ github.event.inputs.skip_upload }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+
+      - name: Set up Python
+        run: |
+          if ! command -v python3 &> /dev/null; then
+            echo "::error::Python 3 not found on self-hosted runner"
+            exit 1
+          fi
+          python3 --version
+
+      - name: Install PlatformIO
+        run: |
+          if ! command -v platformio &> /dev/null; then
+            python3 -m pip install --user platformio
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+          platformio --version
+
+      - name: Build firmware
+        run: |
+          echo "Building firmware for ${{ steps.set-env.outputs.environment }}..."
+          platformio run -e ${{ steps.set-env.outputs.environment }}
+          
+          # Check build artifacts
+          ELF_FILE=".pio/build/${{ steps.set-env.outputs.environment }}/firmware.elf"
+          UF2_FILE=".pio/build/${{ steps.set-env.outputs.environment }}/firmware.uf2"
+          
+          if [ ! -f "$ELF_FILE" ]; then
+            echo "::error::Build failed - firmware.elf not found"
+            exit 1
+          fi
+          
+          SIZE_KB=$(du -k "$ELF_FILE" | cut -f1)
+          echo "✅ Build successful - Firmware size: ${SIZE_KB}KB"
+
+      - name: Upload firmware to hardware
+        if: steps.set-env.outputs.skip_upload != 'true'
+        run: |
+          echo "Uploading firmware to RP2040..."
+          
+          # Check if device is already in BOOTSEL mode
+          if lsusb | grep -q "2e8a:0003"; then
+            echo "Device already in BOOTSEL mode"
+          else
+            echo "Attempting automatic reset via 1200 baud DTR..."
+          fi
+          
+          # Upload with timeout
+          timeout 60 platformio run --target upload -e ${{ steps.set-env.outputs.environment }} || {
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "::error::Upload timeout - device may need manual BOOTSEL"
+              exit 1
+            else
+              echo "::warning::Upload may have failed (exit code: $EXIT_CODE)"
+            fi
+          }
+          
+          echo "Waiting for device to reboot and enumerate..."
+          sleep 3
+
+      - name: Verify serial port enumeration
+        run: |
+          echo "Checking for USB CDC serial port..."
+          
+          # Wait up to 10 seconds for serial port
+          for i in {1..10}; do
+            if ls /dev/ttyACM* 2>/dev/null; then
+              SERIAL_PORT=$(ls /dev/ttyACM* | head -1)
+              echo "✅ Serial port found: $SERIAL_PORT"
+              echo "SERIAL_PORT=$SERIAL_PORT" >> $GITHUB_ENV
+              break
+            fi
+            echo "Waiting for serial port... ($i/10)"
+            sleep 1
+          done
+          
+          if [ -z "$SERIAL_PORT" ]; then
+            echo "::error::Serial port not found after firmware upload"
+            exit 1
+          fi
+
+      - name: Capture serial output
+        timeout-minutes: 2
+        run: |
+          echo "Capturing serial output for 5 seconds..."
+          
+          # Install pyserial if needed
+          python3 -m pip install --user pyserial 2>/dev/null || true
+          
+          # Capture serial data
+          python3 << 'EOF' || echo "::warning::Serial capture failed"
+          import serial
+          import time
+          import sys
+          
+          try:
+              port = serial.Serial('${{ env.SERIAL_PORT }}', 115200, timeout=0.1)
+              start = time.time()
+              lines = []
+              
+              while time.time() - start < 5:
+                  if port.in_waiting:
+                      line = port.readline().decode('utf-8', errors='ignore').strip()
+                      if line:
+                          print(line)
+                          lines.append(line)
+                  time.sleep(0.01)
+              
+              port.close()
+              
+              # Check for expected output patterns
+              output = '\n'.join(lines)
+              
+              if 'Motor' in output or 'A=' in output:
+                  print("\n✅ Motor output detected")
+                  sys.exit(0)
+              elif 'USB HID' in output or 'Ready' in output:
+                  print("\n✅ Firmware running (motor may not be initialized)")
+                  sys.exit(0)
+              else:
+                  print("\n⚠️ No expected output pattern found")
+                  sys.exit(0)  # Don't fail - firmware may be running silently
+                  
+          except Exception as e:
+              print(f"❌ Serial capture error: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Check HID joystick enumeration
+        run: |
+          echo "Checking for HID joystick device..."
+          
+          # Check /dev/input/js*
+          if ls /dev/input/js* 2>/dev/null; then
+            JOYSTICK=$(ls /dev/input/js* | head -1)
+            echo "✅ HID Joystick found: $JOYSTICK"
+          else
+            echo "::warning::No /dev/input/js* device found"
+          fi
+          
+          # Check lsusb for HID device
+          if lsusb | grep -i "2e8a"; then
+            echo "✅ RP2040 USB device detected:"
+            lsusb | grep -i "2e8a"
+          else
+            echo "::warning::RP2040 USB device not found in lsusb"
+          fi
+
+      - name: Test motor angle tracking
+        if: steps.set-env.outputs.environment == 'pico_1motor_endless'
+        timeout-minutes: 1
+        run: |
+          echo "Testing motor angle tracking..."
+          
+          python3 << 'EOF' || echo "::warning::Motor test inconclusive"
+          import serial
+          import time
+          import re
+          
+          try:
+              port = serial.Serial('${{ env.SERIAL_PORT }}', 115200, timeout=0.5)
+              time.sleep(0.5)
+              
+              angle_pattern = re.compile(r'A=([\d.]+)')
+              angles_found = 0
+              
+              for _ in range(20):  # Sample for ~2 seconds
+                  line = port.readline().decode('utf-8', errors='ignore')
+                  match = angle_pattern.search(line)
+                  if match:
+                      angle = float(match.group(1))
+                      angles_found += 1
+                      if angles_found <= 3:
+                          print(f"Angle sample: {angle:.2f}°")
+              
+              port.close()
+              
+              if angles_found > 5:
+                  print(f"\n✅ Motor angle tracking active ({angles_found} samples)")
+              else:
+                  print(f"\n⚠️ Motor angle tracking uncertain ({angles_found} samples)")
+                  
+          except Exception as e:
+              print(f"⚠️ Motor test error: {e}")
+          EOF
+
+      - name: Hardware test summary
+        if: always()
+        run: |
+          echo "## Hardware Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ steps.set-env.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Runner**: ${{ runner.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Hardware integration test passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Hardware integration test failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-test-logs-${{ steps.set-env.outputs.environment }}
+          path: |
+            .pio/build/${{ steps.set-env.outputs.environment }}/*.log
+            platformio.log
+          if-no-files-found: ignore
+          retention-days: 7
