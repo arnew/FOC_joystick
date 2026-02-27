@@ -507,10 +507,12 @@ class HIDControllerTestSuite:
         # This maps to 0-180° range, testable for both motor types
         test_values = [0, 16, 32, 48, 64]
         
-        for cc_val in test_values:
+        total_steps = len(test_values)
+        for step_idx, cc_val in enumerate(test_values, start=1):
+            print(f"  Step {step_idx}/{total_steps}: send CC#64={cc_val}")
             self.send_midi_cc(64, cc_val)
             # Wait for debug output (1 Hz rate) plus motor settle time
-            time.sleep(1.5)
+            time.sleep(1.8)
             
             # Read the angle (support both old and new format)
             lines = self.read_debug_lines(timeout=2.0)

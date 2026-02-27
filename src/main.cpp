@@ -18,10 +18,69 @@
 
 #include <Arduino.h>
 #include <SimpleFOC.h>
+#include <stdio.h>
 #include "config.h"
 #include "motor_control.h"
 #include "midi_handler.h"
 #include "usb_hid.h"
+
+// ============================================================================
+// I/O RATE SCHEDULING (USB CDC + MIDI + HID)
+// ============================================================================
+
+static constexpr uint16_t HID_UPDATE_INTERVAL_MS = 20;      // 50 Hz
+static constexpr uint16_t DEBUG_UPDATE_INTERVAL_MS = 1000;  // 1 Hz
+static constexpr uint16_t MIDI_MAX_BYTES_PER_LOOP = 24;     // 8 CC messages max
+static constexpr uint32_t MIDI_BUDGET_US = 500;             // max MIDI time slice
+static constexpr size_t DEBUG_MIN_WRITE_BYTES = 32;
+
+static void service_midi_input() {
+  uint32_t start_us = micros();
+  uint16_t bytes_processed = 0;
+
+  while (usb_midi.available()) {
+    handle_midi_byte(usb_midi.read());
+    bytes_processed++;
+
+    if (bytes_processed >= MIDI_MAX_BYTES_PER_LOOP) {
+      break;
+    }
+    if ((micros() - start_us) >= MIDI_BUDGET_US) {
+      break;
+    }
+  }
+}
+
+static void service_hid_output(unsigned long now_ms) {
+  static unsigned long last_hid_ms = 0;
+
+  if ((now_ms - last_hid_ms) < HID_UPDATE_INTERVAL_MS) {
+    return;
+  }
+
+  axis_values[0] = angle_to_joystick_value(0);
+  axis_values[1] = angle_to_joystick_value(1);
+  send_hid_report();
+  last_hid_ms = now_ms;
+}
+
+static void service_debug_output(unsigned long now_ms) {
+  static unsigned long last_debug_ms = 0;
+
+  if ((now_ms - last_debug_ms) < DEBUG_UPDATE_INTERVAL_MS) {
+    return;
+  }
+
+  // Never block control loop on CDC when host is not draining serial.
+  if (Serial && Serial.availableForWrite() >= DEBUG_MIN_WRITE_BYTES) {
+    char line[48];
+    snprintf(line, sizeof(line), "A=%.2f T=%.2f", get_motor_angle(0), target_angle[0]);
+    Serial.println(line);
+  }
+
+  // Keep cadence stable even if one cycle is skipped due to full USB CDC buffer.
+  last_debug_ms = now_ms;
+}
 
 // Magic bootloader reentry address for RP2040
 // When the host does a 1200bps reset (DTR toggle), this code detects it
@@ -80,33 +139,12 @@ void setup() {
 void loop() {
   // 1. FOC control (~1kHz)
   update_motor(0);
-  
-  // 2. MIDI input (async USB)
-  while (usb_midi.available()) {
-    handle_midi_byte(usb_midi.read());
-  }
-  
-  // 4. USB HID output (~100Hz)
-  static unsigned long last_hid = 0;
-  unsigned long now = millis();
-  
-  if (now - last_hid >= 10) {
-    axis_values[0] = angle_to_joystick_value(0);
-    axis_values[1] = angle_to_joystick_value(1);
-    
-    send_hid_report();
-    last_hid = now;
-  }
-  
-  // 5. Debug output (1 Hz)
-  static unsigned long last_debug = 0;
-  
-  if (now - last_debug >= 1000) {
-    Serial.print("A=");
-    Serial.print(get_motor_angle(0), 2);
-    Serial.print(" T=");
-    Serial.println(target_angle[0], 2);
-    
-    last_debug = now;
-  }
+
+  // 2. MIDI input (bounded burst handling)
+  service_midi_input();
+
+  // 3. USB outputs (scheduled)
+  unsigned long now_ms = millis();
+  service_hid_output(now_ms);
+  service_debug_output(now_ms);
 }

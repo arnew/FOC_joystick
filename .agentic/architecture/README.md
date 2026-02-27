@@ -9,6 +9,7 @@ System design, build procedures, and code style guidelines.
 - [PLANNING.md](PLANNING.md) - 6-phase implementation architecture
 - [QUICKSTART.md](QUICKSTART.md) - Build, upload, test instructions
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md) - Code cleanup & modularization plan
+- [IO_RATE_STRATEGY.md](IO_RATE_STRATEGY.md) - MIDI/HID/Debug scheduling and bandwidth budget
 
 ---
 
@@ -19,7 +20,7 @@ System design, build procedures, and code style guidelines.
 - **Indexing**: Motors 0-1 for dual setup; axes correspond to motors
 - **Config**: Static arrays in `src/config.h` (no runtime changes)
 - **MIDI**: 3-byte stateful parser, CC# 0-127
-- **Timing**: FOC ~1kHz, USB HID ~100Hz, debug ~1Hz (interval-based, no blocking)
+- **Timing**: FOC best-effort high-rate, USB HID 50Hz, debug 1Hz, bounded MIDI budget
 
 ### Common Edits
 

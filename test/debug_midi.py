@@ -9,6 +9,8 @@ import time
 import sys
 import glob
 
+SWEEP_DEFAULT_DELAY_S = 1.5
+
 
 def find_midi_port():
     """Find RP2040 MIDI serial port (usually /dev/ttyACM1)"""
@@ -38,7 +40,7 @@ def main():
         print(f"✓ Connected to {port} @ 31250 baud")
         print("\nUsage:")
         print("  cc <num> <val>   - Send CC (e.g., cc 64 100)")
-        print("  sweep <cc> [min] [max] [step] - Send CC sweep")
+        print(f"  sweep <cc> [min] [max] [step] [delay_s] - Send CC sweep (default delay {SWEEP_DEFAULT_DELAY_S:.1f}s)")
         print("  exit             - Quit\n")
         
         while True:
@@ -68,14 +70,24 @@ def main():
                         cc_min = int(parts[1]) if len(parts) > 1 else 0
                         cc_max = int(parts[2]) if len(parts) > 2 else 127
                         cc_step = int(parts[3]) if len(parts) > 3 else 10
+                        if cc_step <= 0:
+                            print("  ✗ step must be > 0")
+                            continue
+                        delay_s = float(parts[4]) if len(parts) > 4 else SWEEP_DEFAULT_DELAY_S
+                        if delay_s < 0.0:
+                            print("  ✗ delay_s must be >= 0")
+                            continue
+                        step_count = ((cc_max - cc_min) // cc_step) + 1
+                        start = time.time()
                         
-                        print(f"  → Sweeping CC#{cc_num}: {cc_min} to {cc_max} (step {cc_step})")
-                        for cc_val in range(cc_min, cc_max + 1, cc_step):
+                        print(f"  → Sweeping CC#{cc_num}: {cc_min} to {cc_max} (step {cc_step}, delay {delay_s:.2f}s)")
+                        for idx, cc_val in enumerate(range(cc_min, cc_max + 1, cc_step), start=1):
                             send_cc(ser, cc_num, cc_val)
-                            print(f"     CC#{cc_num} = {cc_val}")
-                            time.sleep(0.1)
+                            elapsed = time.time() - start
+                            print(f"     [{idx:02d}/{step_count:02d}] t={elapsed:5.1f}s  CC#{cc_num} = {cc_val}")
+                            time.sleep(delay_s)
                     else:
-                        print("  Usage: sweep <cc_num> [min] [max] [step]")
+                        print("  Usage: sweep <cc_num> [min] [max] [step] [delay_s]")
                 
                 else:
                     print("  ✗ Unknown command")
