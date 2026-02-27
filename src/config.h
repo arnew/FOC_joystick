@@ -142,18 +142,34 @@ static const AxisProfile A320_CONFIG[] = {
   },
   {
     .motor_id = 0,
-    .midi_cc = 11,
+    .midi_cc = 5,
     .label = "Flaps",
     .reversed = false,
     .scaling_factor = 1.0f,
     .motor = MOTOR_0
   },
   {
+    .motor_id = 0,
+    .midi_cc = 65,
+    .label = "Spoilers",
+    .reversed = false,
+    .scaling_factor = 1.0f,
+    .motor = MOTOR_0
+  },
+  {
     .motor_id = 1,
-    .midi_cc = 64,
+    .midi_cc = 10,
     .label = "Trim",
     .reversed = false,
     .scaling_factor = 2.0f,
+    .motor = MOTOR_1
+  },
+  {
+    .motor_id = 1,
+    .midi_cc = 11,
+    .label = "Gear",
+    .reversed = false,
+    .scaling_factor = 1.0f,
     .motor = MOTOR_1
   }
 };

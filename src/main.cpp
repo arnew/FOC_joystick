@@ -569,6 +569,11 @@ void setup() {
   // Initialize USB devices
   // Serial (CDC#0): Debug output at 115200 baud (built-in via Arduino)
   Serial.begin(115200);
+  
+  // Serial1 (CDC#1 or UART): Alternative MIDI input (backup)
+  // For test harness compatibility, also accept MIDI via Serial1 @ 31250 baud
+  Serial1.begin(31250);  // Standard MIDI baud rate
+  
   // Start native USB MIDI device (host will create a MIDI port)
   usb_midi.begin();
   
@@ -578,7 +583,8 @@ void setup() {
   Serial.println("\n=== USB HID Joystick Controller ===");
   Serial.println("USB Interfaces Initialized:");
   Serial.println("  CDC#0 /dev/ttyACM0 (115200) - Debug output");
-  Serial.println("  Native USB MIDI port - MIDI input @ 31250 baud");
+  Serial.println("  Native USB MIDI - MIDI CC input (primary)");
+  Serial.println("  Serial1 (31250) - Alternative MIDI input (fallback)");
   Serial.println("  USB HID Joystick (Gamepad) - 8 buttons + 2 axes");
   Serial.println("Initializing Motor 0...");
   
@@ -668,11 +674,16 @@ void loop() {
   // current_angle[1] = motor1.shaft_angle;
   // motor1.move(target_angle[1]);
   
-  // ===== 2. MIDI Input (Async via native USB MIDI) =====
-  // Read MIDI CC commands from native USB MIDI port
-  // Format: Standard 3-byte MIDI CC messages
+  // ===== 2. MIDI Input (Dual Path: Native USB MIDI + CDC Serial1 Fallback) =====
+  // Poll native USB MIDI (primary)
   while (usb_midi.available()) {
     handle_midi_byte(usb_midi.read());
+  }
+  
+  // Poll CDC MIDI via Serial1 (backup for test harness compatibility)
+  // Serial1 115200 baud for compatible with existing test infrastructure
+  if (Serial1.available()) {
+    handle_midi_byte(Serial1.read());
   }
   
   // ===== 2.5. Serial Command Input (Online PID Parameter Transfer) =====
