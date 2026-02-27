@@ -23,7 +23,7 @@ on:
 
 jobs:
   hardware-test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, hardware]
     timeout-minutes: 15
     
     steps:

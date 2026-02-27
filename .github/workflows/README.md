@@ -77,7 +77,39 @@ This directory contains CI/CD workflows for the FOC Joystick project.
 
 ---
 
-### 4. Pull Request Validation (`pr-validation.yml`)
+### 4. Deploy to Hardware (`deploy.yml`)
+**Trigger**: Manual dispatch only
+
+**Purpose**: Quick firmware deployment to connected hardware (single motor, endless config)
+
+**Requirements**:
+- Self-hosted runner with tag: `hardware`
+- RP2040 Pico connected via USB
+- Motor + AS5600 encoder (for `pico_1motor_endless`)
+
+**What it does**:
+1. Builds firmware for selected environment
+2. Uploads firmware to hardware
+3. Verifies device enumeration (serial port, HID joystick, USB)
+4. Quick serial output check (3 seconds)
+5. Deployment status summary
+
+**Manual trigger inputs**:
+- `environment`: Which config to deploy (default: pico_1motor_endless)
+- `force_manual_bootsel`: Skip automatic reset, require manual BOOTSEL button
+
+**Use cases**:
+- Quick firmware updates during development
+- Deploy after merging features to dev
+- Test firmware on actual hardware before release
+
+**vs hardware-test.yml**:
+- `deploy.yml`: Fast deployment + basic verification (~2-3 minutes)
+- `hardware-test.yml`: Full integration test suite (~10-15 minutes)
+
+---
+
+### 5. Pull Request Validation (`pr-validation.yml`)
 **Trigger**: PR opened/updated targeting dev or main
 
 **Purpose**: Comprehensive PR validation before merge
@@ -96,7 +128,7 @@ This directory contains CI/CD workflows for the FOC Joystick project.
 
 ---
 
-### 5. Release (`release.yml`)
+### 6. Release (`release.yml`)
 **Trigger**: Push tag `v*.*.*` OR manual dispatch with version input
 
 **Purpose**: Create GitHub release with firmware binaries
@@ -125,6 +157,18 @@ firmware-pico_2motor_limited-v1.0.0.zip
 
 ## Usage Examples
 
+### Deploy firmware to hardware
+```bash
+# Quick deployment (automatic reset)
+gh workflow run deploy.yml \
+  --field environment=pico_1motor_endless
+
+# Deploy with manual BOOTSEL
+gh workflow run deploy.yml \
+  --field environment=pico_1motor_endless \
+  --field force_manual_bootsel=true
+```
+
 ### Run hardware test manually
 ```bash
 gh workflow run hardware-test.yml \
@@ -152,7 +196,7 @@ gh run watch  # Watch latest run
 
 ## Self-Hosted Runner Setup
 
-For hardware testing, you need a self-hosted runner:
+For hardware testing and deployment, you need a self-hosted runner with the `hardware` tag:
 
 ### Requirements
 - Linux machine (Ubuntu/Debian recommended)
@@ -160,6 +204,7 @@ For hardware testing, you need a self-hosted runner:
 - Motor + AS5600 encoder wired (for full tests)
 - Python 3.8+
 - USB permissions configured
+- Runner tagged with: `hardware`
 
 ### Installation
 ```bash
@@ -177,9 +222,22 @@ pip3 install --user platformio
 
 # 4. Download and configure GitHub Actions runner
 # (Follow instructions from repo Settings → Actions → Runners → Add runner)
+# IMPORTANT: When adding labels, include: self-hosted,Linux,X64,hardware
 
 # 5. Start runner
 ./run.sh
+```
+
+### Adding the "hardware" tag
+The runner must have the `hardware` label to be selected by deploy.yml and hardware-test.yml.
+
+Add it during initial setup or update existing runner:
+```bash
+# During setup:
+./config.sh --url https://github.com/USER/REPO --token TOKEN --labels self-hosted,Linux,X64,hardware
+
+# Or via GitHub UI:
+# Settings → Actions → Runners → [Your Runner] → Edit labels → Add "hardware"
 ```
 
 ### Testing runner
@@ -208,7 +266,9 @@ release.yml
 ├── create-release (tag & changelog)
 └── build-release-firmware (all environments)
 
-hardware-test.yml (standalone, self-hosted)
+deploy.yml (standalone, self-hosted with "hardware" tag)
+
+hardware-test.yml (standalone, self-hosted with "hardware" tag)
 ```
 
 ---
