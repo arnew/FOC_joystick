@@ -51,10 +51,11 @@ gh workflow run manual-hardware-test.yml \
 - `sweep` — Motor sweep range and tracking
 - `dynamics` — High-speed dynamics (requires --enable-monitor)
 
-**Local selective testing**:
+**Local testing**:
 ```bash
 cd test
-./run_ci_tests.sh midi sweep  # Run only specified tests
+python3 test_suite_automated.py --tests midi sweep  # Run specific tests
+python3 test_suite_automated.py                     # Run all tests
 ```
 
 ## Self-Hosted Runner Requirements
