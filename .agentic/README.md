@@ -34,13 +34,35 @@
 
 ## Current Status (February 2026)
 
-- ✅ Dual-loop PID tuning implemented
-- ✅ Quality evaluation system (72.9/100 after fixes)
-- ✅ Online parameter transfer working
-- 🔄 Code refactoring planned (main.cpp 727→80 lines)
-- 🔄 SimpleFOC Studio integration planned (replace custom protocol)
-- ⚠️ Motor reliability issues identified (see [sessions/](sessions/))
-- 🔄 4/6 automated tests passing
+**Development Model**: Git-flow with feature branches, experiments documented in sessions/
+
+**Active Branches**:
+| Branch | Status | Description |
+|--------|--------|-------------|
+| `feature/modularize-main` | ✅ Working baseline | SimpleFOC + knowledge base + CI framework |
+| `feature/hid-report` | ✅ Ready for testing | Full HID+MIDI+SimpleFOC integration |
+| `feature/tinyusb-minimal` | ✅ Completed | Minimal HID-only for bootloader isolation |
+| `experiment/tinyusb_bootloader` | ✅ **BREAKTHROUGH** | Bootloader reentry verified working! |
+
+**Recent Breakthrough** (2026-02-27):
+- 🎯 **Bootloader reentry NOW WORKS** via automatic 1200bps DTR reset
+- Was documented as critical blocker requiring manual BOOTSEL
+- Multiple fix attempts failed (DTR callbacks, timing adjustments)
+- Silently resolved by earlephilhower toolchain updates
+- 5/5 sequential reboots successful in automated testing
+- **Impact**: Fully automated CI/CD now possible without manual intervention
+
+**Project State**:
+- ✅ SimpleFOC motor control baseline working
+- ✅ USB HID joystick implementation complete
+- ✅ MIDI command parsing ready (skeleton present)
+- ✅ TinyUSB configuration correct (HID + MIDI + CDC)
+- ✅ Test infrastructure established (headless + hardware markers)
+- ✅ Knowledge base comprehensive (all experiments documented)
+- ⏳ Hardware integration testing pending (motor wiring on CI runner)
+- ⏳ MSFS companion script integration (next phase)
+
+**All Experiments Documented**: See [KNOWLEDGE_BASE.md#experiments](KNOWLEDGE_BASE.md#experiments-branch-history) for complete history across all branches
 
 ---
 
