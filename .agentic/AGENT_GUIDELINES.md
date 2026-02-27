@@ -25,6 +25,53 @@
 - Do not ask the human user to run tests for agent verification
 - If local tests are run by an agent, treat them as pre-checks only; final validation is CI
 
+### CI-First Workflow
+**Agents must validate all changes via CI before considering work complete**
+
+**Pre-Push Validation** (Use `.github/scripts/pre-push-check.sh`):
+```bash
+.github/scripts/pre-push-check.sh
+```
+This checks:
+- Function size compliance (≤43 lines per AGENTS.md)
+- Build success (platformio run)
+- Headless tests pass (pytest)
+
+**Post-Push CI Verification** (Use `.github/scripts/wait-for-ci.sh`):
+```bash
+# Push changes
+git push origin <branch>
+
+# Wait for CI and verify all workflows pass
+.github/scripts/wait-for-ci.sh <commit-sha>
+```
+This waits for all 4 CI workflows (Build, Code Quality, Headless Test, Hardware Test) to complete and reports status.
+
+**Mandatory CI Checks**:
+- ✅ Build Firmware: Compiles successfully for all environments
+- ✅ Code Quality: Function size limits enforced, no lint errors
+- ✅ Headless Test: pytest suite passes (unit tests, simulators)
+- ⏳ Hardware Test: Full HIL validation (may take 5-10 min, requires physical device)
+
+**Workflow**:
+1. Make changes
+2. Run pre-push checks locally (optional but recommended)
+3. Commit and push to dev branch
+4. Use wait-for-ci.sh or gh CLI to monitor CI status
+5. If CI fails, investigate logs and fix
+6. Only consider task complete when all CI checks pass
+
+**CI Failure Handling**:
+- Check GitHub Actions logs: `gh run view <run-id> --log-failed`
+- Fix issues locally
+- Re-run pre-push checks
+- Push fixes and verify CI again
+- **Do not proceed** to next task until CI is green
+
+**References**:
+- Full enforcement plan: [.agentic/ci/AGENT_CI_WORKFLOW_ENFORCEMENT.md](.agentic/ci/AGENT_CI_WORKFLOW_ENFORCEMENT.md)
+- Recent CI results: [.agentic/ci/CI_TEST_RESULTS_2026-02-28.md](.agentic/ci/CI_TEST_RESULTS_2026-02-28.md)
+
 ### Agent-Positive
 - ✅ Agents plan and execute without asking (unless design decision)
 - ✅ Agents create commits and merge code

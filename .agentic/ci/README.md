@@ -5,6 +5,8 @@ Tools and workflows for automated testing, cloud validation, and agentic GitHub 
 ## Quick Navigation
 
 - [GitHub Integration & Development Workflow](GITHUB_INTEGRATION.md) — How agents use `gh` CLI for develop/push/validate cycle, CI monitoring, and issue tracking
+- [Agent CI Workflow Enforcement](AGENT_CI_WORKFLOW_ENFORCEMENT.md) — Comprehensive plan for forcing agents to validate all changes via CI/CD (5-phase implementation with automation scripts)
+- [CI Test Results 2026-02-28](CI_TEST_RESULTS_2026-02-28.md) — Complete CI validation results from aircraft profiles implementation
 
 ## Current Infrastructure
 
