@@ -1,6 +1,8 @@
 # Agent Knowledge Base
 
-**Purpose**: Agent-accessible documentation for autonomous development
+**Purpose**: Graph database of agent knowledge for USB HID joystick controller with dual motorized axes and MIDI input.
+
+**Status**: Living documentation updated with each development phase.
 
 ---
 
@@ -14,43 +16,71 @@
 
 ---
 
-## Directory Structure
+## Quick Navigation
 
 ```
 .agentic/
-├── PURPOSE.md              ⭐ What this project is
-├── AGENT_GUIDELINES.md     ⭐ How agents work
-├── KNOWLEDGE_BASE.md       ⭐ Technical baseline
-├── README.md               (this file)
-├── ci/                     GitHub workflows, automation
-├── testing/                Test infrastructure and results
-└── sessions/               Development session notes
+├─ PURPOSE.md              ⭐ What this project is
+├─ AGENT_GUIDELINES.md     ⭐ How agents work
+├─ KNOWLEDGE_BASE.md       ⭐ Technical baseline
+├─ architecture/           System design, build procedures
+├─ ci/                     GitHub workflows, `gh` CLI
+├─ tuning/                 PID calibration (implementation + guides)
+├─ quality/                Performance evaluation & fixes
+├─ testing/                Hardware issues & test results
+└─ sessions/               Development session notes
 ```
 
 ---
 
-## Quick Links
+## Getting Started Paths
 
-### Essential Reading
-1. [Project Purpose](PURPOSE.md) - Goals and success criteria
-2. [Agent Guidelines](AGENT_GUIDELINES.md) - Decision framework and anti-patterns
-3. [Technical Knowledge](KNOWLEDGE_BASE.md) - Working baseline and known issues
-
-### Development
-- [Working Baseline](KNOWLEDGE_BASE.md#working-baseline) - Current feature/modularize-main state
-- [Known Issues](KNOWLEDGE_BASE.md#known-issues) - TinyUSB bootloader, etc.
-- [Build Commands](KNOWLEDGE_BASE.md#working-baseline) - How to compile and upload
-
-### Testing
-- [Test Strategy](KNOWLEDGE_BASE.md#testing-strategy) - Headless vs hardware tests
-- [CI/CD Pipeline](KNOWLEDGE_BASE.md#cicd-pipeline) - GitHub Actions workflows
+- **New to project?** → [PURPOSE.md](PURPOSE.md) → [AGENT_GUIDELINES.md](AGENT_GUIDELINES.md) → [KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)
+- **Need to build?** → [KNOWLEDGE_BASE.md#working-baseline](KNOWLEDGE_BASE.md#working-baseline)
+- **Testing & CI workflow?** → [ci/GITHUB_INTEGRATION.md](ci/GITHUB_INTEGRATION.md)
+- **Code refactoring?** → [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md)
+- **Tuning motors?** → [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md)
+- **GUI tuning?** → [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md)
+- **Motor noisy/unstable?** → [quality/QUICK_FIX.md](quality/QUICK_FIX.md)
+- **Real-time tuning?** → [tuning/guides/ONLINE_PARAMETER_TRANSFER.md](tuning/guides/ONLINE_PARAMETER_TRANSFER.md)
+- **Fixing issues?** → [testing/TESTING_FINDINGS.md](testing/TESTING_FINDINGS.md)
 
 ---
 
-## Navigation
+## Current Status (February 2026)
 
-Each subdirectory contains its own README.md with links to related documentation:
+- ✅ Dual-loop PID tuning implemented
+- ✅ Quality evaluation system (72.9/100 after fixes)
+- ✅ Online parameter transfer working
+- 🔄 Code refactoring planned (main.cpp 727→80 lines)
+- 🔄 SimpleFOC Studio integration planned (replace custom protocol)
+- ⚠️ Motor reliability issues identified (see [sessions/](sessions/))
+- 🔄 4/6 automated tests passing
+- ✅ Headless pytest gated by `RUN_HARDWARE_TESTS=1`
 
-- `ci/README.md` - CI/CD workflows and GitHub integration
-- `testing/README.md` - Test infrastructure and findings
-- `sessions/README.md` - Session summaries and progress tracking
+---
+
+## Key Documents by Use Case
+
+| Use Case | Primary Reference |
+|----------|------------------|
+| System architecture | [architecture/PLANNING.md](architecture/PLANNING.md) |
+| Build & upload firmware | [architecture/QUICKSTART.md](architecture/QUICKSTART.md) |
+| Code refactoring plan | [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md) |
+| Code style guidelines | [architecture/README.md](architecture/README.md) |
+| Calibrate motor | [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md) |
+| GUI tuning (planned) | [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md) |
+| Real-time tuning | [tuning/guides/ONLINE_PARAMETER_TRANSFER.md](tuning/guides/ONLINE_PARAMETER_TRANSFER.md) |
+| Fix noisy motor | [quality/QUICK_FIX.md](quality/QUICK_FIX.md) |
+| Understand test failures | [testing/TEST_RESULTS.md](testing/TEST_RESULTS.md) |
+| Latest implementation | [tuning/implementation/DUAL_LOOP_IMPLEMENTATION.md](tuning/implementation/DUAL_LOOP_IMPLEMENTATION.md) |
+
+---
+
+## File Naming Conventions
+
+- `README.md` - Folder index (required in each folder)
+- `IMPLEMENTATION.md` - Technical implementation details
+- `GUIDE.md` / `TUNING.md` - User-facing how-to docs
+- `RESULTS.md` / `FINDINGS.md` - Measurement data & observations
+- `SUMMARY.md` - Session/feature summaries

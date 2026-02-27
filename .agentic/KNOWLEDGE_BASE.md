@@ -1,7 +1,7 @@
 # Technical Knowledge Base
 
 **Last Updated**: 2026-02-27
-**Status**: Foundation established - working baseline captured
+**Status**: Working baseline established
 
 ---
 
@@ -14,7 +14,7 @@
 - **USB**: Native USB 1.1 (TinyUSB stack)
 - **Bootloader**: earlephilhower (BOOTSEL button for uploads)
 
-### Motor Control (CI Runner Only)
+### Motor Control
 - **Sensor**: AS5600 12-bit magnetic encoder (I2C @ 0x36)
 - **Motor**: 3-phase BLDC with PWM driver
 - **Control**: SimpleFOC library (FOC algorithm)
@@ -58,11 +58,9 @@ build_flags =
 
 ## Working Baseline
 
-### Current State: feature/modularize-main
+### Feature: Main Branch (feature/modularize-main)
 
-**Build Status**: ✅ Compiles successfully (~14-20s)
-**Upload Method**: Manual BOOTSEL press required
-**Test Hardware**: CI runner with endless motor
+**Status**: ✅ **WORKS** - Manual BOOTSEL upload required
 
 **Capabilities**:
 - ✅ Motor initialization (SimpleFOC)
@@ -72,20 +70,18 @@ build_flags =
 - ⏳ MIDI input (library linked, handler WIP)
 - ⏳ SimpleFOC Commander integration
 
-**Build Command**:
+**Build**:
 ```powershell
-platformio run -e pico_1motor_endless
+platformio run -e pico_1motor_endless  # ~14-20s
 ```
 
-**Upload Procedure**:
+**Upload**:
 ```powershell
-# 1. Hold BOOTSEL button on Pico
-# 2. Run upload command:
-platformio run --target upload -e pico_1motor_endless
-# 3. Release BOOTSEL when upload completes (~15-25s)
+# Hold BOOTSEL button, then:
+platformio run --target upload -e pico_1motor_endless  # ~15-25s
 ```
 
-**Expected Serial Output**:
+**Serial Output** (expected):
 ```
 === USB HID Joystick Controller ===
 USB: CDC /dev/ttyACM0 (115200)
@@ -99,10 +95,23 @@ A=0.00 T=0.00
 A=0.00 T=0.00
 ```
 
-Where:
-- `A=` current angle
-- `T=` target angle
-- `~` PID debug values (error, P, I, D terms)
+### Feature: Minimal Branch (feature/tinyusb-minimal)
+
+**Status**: ✅ **WORKS** - Bootloader debugging baseline
+
+**Capabilities**:
+- ✅ USB HID joystick (test pattern only)
+- ✅ Serial debug output
+- ❌ No motor control (stripped for debugging)
+- ❌ No MIDI (not added yet)
+
+**Purpose**: Isolate TinyUSB integration from SimpleFOC complexity
+
+**Serial Output** (expected):
+```
+Status: X=-121 Y=-36 Buttons=89
+Status: X=-12 Y=-126 Buttons=F6
+```
 
 ---
 
@@ -114,23 +123,27 @@ Where:
 
 **Impact**: Requires manual BOOTSEL button press for uploads
 
-**Status**: Acceptable workaround in place
-
 **Workaround**: Hold BOOTSEL during upload (works 100% reliably)
-
-**Root Cause**: Adafruit TinyUSB doesn't implement Arduino-standard DTR-on-reset bootloader reentry. The earlephilhower bootloader supports it, but the TinyUSB CDC stack isn't wired to trigger it.
 
 **Attempts Made**:
 1. ❌ TinyUSB CDC callback (`tud_cdc_line_state_cb()`) - timing issue
-2. ❌ USB-first initialization (moved Serial.begin before motor init) - no effect
-3. ❌ DTR polling concept - not fully implemented
+2. ❌ USB-first initialization - still no automatic reboot
+3. ❌ DTR polling in loop - not implemented fully
 
-**Recommendation**: Accept manual BOOTSEL as permanent solution unless user requires automation. Feature development is higher priority.
+**Recommended Fix** (for future):
+- Research earlephilhower bootloader docs
+- Try polling DTR in setup() with 1s timeout
+- Or accept manual BOOTSEL as permanent solution
 
-**Future Research** (if needed):
-- Check earlephilhower bootloader documentation
-- Try polling DTR in setup() with 1s timeout loop
-- Consider forking TinyUSB to add reentry hook
+**Documentation**: [.agentic/ci/TINYUSB_BOOTLOADER_ISSUE.md](.agentic/ci/TINYUSB_BOOTLOADER_ISSUE.md)
+
+### 2. MIDI Library Dependency
+
+**Problem**: `#include <MIDI.h>` failed initially
+
+**Solution**: ✅ Added `MIDI` to `lib_deps` in platformio.ini
+
+**Status**: FIXED - compiles successfully
 
 ---
 
@@ -142,7 +155,7 @@ Where:
 **Trigger**: Push to any branch
 **Runners**: `ubuntu-latest`
 **Steps**:
-1. Check function size compliance (≤43 lines per AGENTS.md)
+1. Check function size compliance (≤43 lines)
 2. Build all 3 PlatformIO environments
 **Status**: ✅ Passing
 
@@ -157,60 +170,50 @@ Where:
 
 #### 3. hardware-test.yml
 **Trigger**: Manual dispatch or push to dev/main
-**Runners**: `[self-hosted, hardware]` (CI runner with motor)
+**Runners**: `[self-hosted, hardware]`
 **Steps**:
 1. Setup Python venv
 2. Build firmware
-3. **Upload firmware** (requires manual BOOTSEL trigger on runner)
+3. **Upload firmware** (requires manual BOOTSEL trigger)
 4. Run `pytest -m hardware` (live device tests)
-**Status**: ⏳ Pending - requires manual BOOTSEL on runner or automation
+**Status**: ⏳ Pending - requires BOOTSEL automation or manual trigger
 
 ### GitHub CLI Integration
 
-**Tool**: `gh` CLI (authenticated as arnew, repo scope)
+**Tool**: `gh` CLI (authenticated as arnew)
+**Capabilities**:
+- Trigger workflows: `gh workflow run hardware-test.yml`
+- Monitor runs: `gh run list --workflow=hardware-test.yml`
+- View logs: `gh run view <run-id> --log`
+- Rerun failed: `gh run rerun <run-id>`
 
-**Common Commands**:
-```bash
-# Trigger hardware test manually
-gh workflow run hardware-test.yml
-
-# Check status
-gh run list --workflow=hardware-test.yml --limit 5
-
-# View logs
-gh run view <run-id> --log
-
-# Rerun failed tests
-gh run rerun <run-id>
-```
-
-**Documentation**: See `.agentic/ci/` for full workflow docs
+**Documentation**: [.agentic/ci/GITHUB_INTEGRATION.md](.agentic/ci/GITHUB_INTEGRATION.md)
 
 ---
 
 ## Testing Strategy
 
-### Headless Tests (No Hardware Required)
+### Headless Tests (Simulator)
 **Location**: `test/sim_device.py`
-**Purpose**: Test axis math without physical device
+**Purpose**: Test axis logic without hardware
 **Tests**:
-- Limited axis (0-180° MIDI CC → angle mapping)
+- Limited axis (0-180° mapping)
 - Reversed axis
-- Endless axis (wrap-around behavior)
+- Endless axis (wrap-around)
 
 **Run**:
 ```bash
 pytest -m "not hardware"
 ```
 
-### Hardware Tests (CI Runner Required)
+### Hardware Tests
 **Location**: `test/test_hid_exercise.py`
 **Purpose**: Test live device with motor control
 **Markers**: `@pytest.mark.hardware`
 **Requirements**: 
-- Device connected via USB
-- Firmware uploaded (manual BOOTSEL)
-- Motor attached and calibrated
+- Device connected
+- Firmware uploaded
+- Motor attached (for CI runner)
 
 **Run**:
 ```bash
@@ -224,20 +227,14 @@ RUN_HARDWARE_TESTS=1 pytest -m hardware
 ### Feature Development
 
 ```bash
-# Start new feature branch
+# Start new feature
 git flow feature start my-feature
 
-# Edit code
-# (edit src/...)
-
-# Build
+# Code + test
+edit src/...
 platformio run -e pico_1motor_endless
-
-# Upload (hold BOOTSEL first!)
+# Hold BOOTSEL
 platformio run --target upload -e pico_1motor_endless
-
-# Test
-pytest  # headless tests
 
 # Commit
 git add -A
@@ -247,6 +244,61 @@ git push
 # Merge (HUMAN ONLY)
 git flow feature finish my-feature
 ```
+
+### Bug Fixes
+
+```bash
+# Start hotfix
+git flow hotfix start fix-description
+
+# Fix + test + commit + push
+# ...
+
+# Merge (HUMAN ONLY)
+git flow hotfix finish fix-description
+```
+
+### Testing Before Merge
+
+```bash
+# Run all tests
+pytest  # Headless tests
+RUN_HARDWARE_TESTS=1 pytest -m hardware  # Hardware tests (if device available)
+
+# Check function sizes
+grep -A 50 "^void\|^int\|^float" src/*.cpp | wc -l  # Manual check
+```
+
+---
+
+## Motor Control Details
+
+### SimpleFOC Configuration
+
+**Controller**: `BLDCMotor motor = BLDCMotor(7);`  // 7 pole pairs
+**Sensor**: `MagneticSensorI2C sensor = MagneticSensorI2C(AS5600_I2C);`
+**Driver**: 3-phase PWM (pins in config.h)
+
+**PID Tuning** (default):
+```cpp
+motor.PID_velocity.P = 0.2f;
+motor.PID_velocity.I = 20.0f;
+motor.PID_velocity.D = 0.001f;
+motor.LPF_velocity.Tf = 0.01f;  // 10ms lowpass filter
+```
+
+**Control Mode**: `ANGLE` (position control with velocity profile)
+
+### Tuning Process
+
+1. **Calibration**: Run `test/calibrate_pid.py` (ramp test)
+2. **SimpleFOC Studio**: Connect via serial, adjust P/I/D live
+3. **Save**: Update `pid_config.h` with optimal values
+4. **Test**: Run `test/motor_monitor.py` for stability check
+
+**Docs**:
+- [PID_TUNING_QUICKSTART.md](../PID_TUNING_QUICKSTART.md)
+- [test/RAMP_TEST_GUIDE.md](../test/RAMP_TEST_GUIDE.md)
 
 ---
 
@@ -269,14 +321,14 @@ TUD_HID_REPORT_DESC_GAMEPAD(
 Byte 0: X axis (-127 to 127)
 Byte 1: Y axis (-127 to 127)
 Byte 2: Buttons 0-7 (bitfield)
-Bytes 3-7: Reserved/padding
+Bytes 3-7: Reserved
 ```
 
 **Report Rate**: ~100Hz (10ms interval in main loop)
 
-### MIDI CC Mapping (Planned)
+### MIDI CC Mapping
 
-**Channel**: 1
+**Channel**: 1 (flight sim standard)
 
 | CC# | Control        | Motor | Range      |
 |-----|----------------|-------|------------|
@@ -286,7 +338,92 @@ Bytes 3-7: Reserved/padding
 | 10  | Trim           | 1     | 0-127 → 0-360° |
 | 11  | Landing Gear   | 1     | 0-127 → 0-180° |
 
-**Implementation Status**: ⏳ Handler skeleton present, parsing logic needed
+**Handling**: `src/midi_handler.cpp` (parses CC, updates motor targets)
+
+---
+
+## Debugging
+
+### Serial Monitor
+
+```powershell
+# Windows
+& "C:\Users\Arne Wichmann\.platformio\penv\Scripts\platformio.exe" device monitor
+
+# Or via Python
+python -m serial.tools.miniterm COM14 115200
+```
+
+### Motor Monitoring
+
+```bash
+cd test
+python motor_monitor.py  # Real-time angle/velocity/PID graphs
+```
+
+### HID Debugging
+
+```bash
+cd test
+python debug_joystick.py  # Read HID reports
+```
+
+### MIDI Debugging
+
+```bash
+cd test
+python debug_midi.py  # Monitor MIDI CC messages
+```
+
+---
+
+## Useful Commands
+
+### PlatformIO
+
+```bash
+# Clean build
+pio run --target clean
+
+# Verbose build
+pio run -v
+
+# List devices
+pio device list
+
+# Monitor serial
+pio device monitor --baud 115200
+```
+
+### Git Flow
+
+```bash
+# List features
+git flow feature
+
+# Publish feature
+git flow feature publish my-feature
+
+# Switch between branches
+git checkout feature/tinyusb-minimal
+git checkout feature/modularize-main
+```
+
+### GitHub CLI
+
+```bash
+# Check auth
+gh auth status
+
+# List workflows
+gh workflow list
+
+# Manual trigger
+gh workflow run hardware-test.yml
+
+# Check runs
+gh run list --limit 5
+```
 
 ---
 

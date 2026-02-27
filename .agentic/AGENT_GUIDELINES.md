@@ -159,13 +159,15 @@
 ├── README.md                    (index/navigation)
 ├── ci/
 │   ├── README.md                (CI status and workflows)
-│   └── *.md                     (specific CI topics)
+│   ├── GITHUB_INTEGRATION.md    (gh CLI usage)
+│   └── TINYUSB_BOOTLOADER_ISSUE.md
 ├── testing/
 │   ├── README.md
-│   └── *.md                     (test findings)
+│   ├── HEADLESS_TESTING.md
+│   └── TEST_RESULTS.md
 └── sessions/
     ├── README.md
-    └── YYYY-MM-DD_*.md          (session notes)
+    └── YYYY-MM-DD_session_summary.md
 ```
 
 Every folder gets a README.md index with links to related docs.

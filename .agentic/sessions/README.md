@@ -8,6 +8,7 @@ Session notes, progress summaries, and issue analyses.
 
 - [SESSION_SUMMARY.md](SESSION_SUMMARY.md) - Latest session (quality eval + online parameters)
 - [SITUATION_ANALYSIS_AND_REWORK_PLAN.md](SITUATION_ANALYSIS_AND_REWORK_PLAN.md) - Motor reliability issues & rework plan (Feb 22, 2026)
+- [2026-02-27_AGENTIC_TESTING_UPDATE.md](2026-02-27_AGENTIC_TESTING_UPDATE.md) - Headless test enablement
 
 ---
 
