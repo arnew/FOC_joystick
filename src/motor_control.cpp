@@ -82,40 +82,21 @@ void handle_motor_limits(uint8_t motor_id, float& angle) {
 // MOTOR INITIALIZATION (FOC MODE)
 // ============================================================================
 
-void init_motor(uint8_t motor_id) {
-  if (motor_id >= 2 || !motors[motor_id]) {
-    Serial.print("[MOTOR] Invalid motor_id: ");
-    Serial.println(motor_id);
-    return;
-  }
-  
-  BLDCMotor* motor = motors[motor_id];
-  BLDCDriver3PWM* driver = drivers[motor_id];
-  MagneticSensorI2C* sensor = sensors[motor_id];
-  
+static void setup_motor_driver(uint8_t motor_id, BLDCDriver3PWM* driver) {
   Serial.print("[MOTOR "); Serial.print(motor_id); Serial.println("] Initializing driver...");
-  // Driver setup
   driver->voltage_power_supply = 12.0f;
   driver->pwm_frequency = 30000;
   driver->init();
-  motor->linkDriver(driver);
   Serial.println("[MOTOR] Driver OK");
-  
+}
+
+static void setup_motor_sensor(MagneticSensorI2C* sensor) {
   Serial.println("[MOTOR] Initializing sensor...");
-  // Sensor setup - this may fail if I2C bus is broken or device not connected
   sensor->init();
   Serial.println("[MOTOR] Sensor init complete");
-  motor->linkSensor(sensor);
-  
-  // Angle control mode
-  motor->controller = MotionControlType::angle;
-  motor->voltage_limit = (motor_id == 0) ? 
-    MOTOR0_VOLTAGE_LIMIT : MOTOR0_VOLTAGE_LIMIT;
-  
-  Serial.print("[MOTOR] Angle voltage limit: ");
-  Serial.println(motor->voltage_limit);
-  
-  // PID gains
+}
+
+static void configure_motor_pid(uint8_t motor_id, BLDCMotor* motor) {
   if (motor_id == 0) {
     motor->P_angle.P = MOTOR0_PID_P;
     motor->P_angle.I = MOTOR0_PID_I;
@@ -134,9 +115,33 @@ void init_motor(uint8_t motor_id) {
     Serial.print(" D=");
     Serial.println(MOTOR0_PID_D);
   }
+}
+
+void init_motor(uint8_t motor_id) {
+  if (motor_id >= 2 || !motors[motor_id]) {
+    Serial.print("[MOTOR] Invalid motor_id: ");
+    Serial.println(motor_id);
+    return;
+  }
+  
+  BLDCMotor* motor = motors[motor_id];
+  BLDCDriver3PWM* driver = drivers[motor_id];
+  MagneticSensorI2C* sensor = sensors[motor_id];
+  
+  setup_motor_driver(motor_id, driver);
+  motor->linkDriver(driver);
+  
+  setup_motor_sensor(sensor);
+  motor->linkSensor(sensor);
+  
+  motor->controller = MotionControlType::angle;
+  motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
+  Serial.print("[MOTOR] Angle voltage limit: ");
+  Serial.println(motor->voltage_limit);
+  
+  configure_motor_pid(motor_id, motor);
   
   Serial.println("[MOTOR] Running motor->init()...");
-  // Initialize FOC
   motor->init();
   Serial.println("[MOTOR] Motor init complete");
   
