@@ -60,9 +60,8 @@ jobs:
       - name: Install PlatformIO
         run: |
           if ! command -v platformio &> /dev/null; then
-            # Use --break-system-packages for Python 3.13+ on Debian/Ubuntu
-            python3 -m pip install --user --break-system-packages platformio
-            echo "$HOME/.local/bin" >> $GITHUB_PATH
+            # Install globally with --break-system-packages for Python 3.13+ on Debian/Ubuntu
+            python3 -m pip install --break-system-packages platformio
           fi
           platformio --version
 
