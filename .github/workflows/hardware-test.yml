@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install platformio pyserial
+          pip install platformio pyserial pygame
           which platformio && echo "✓ platformio" || { echo "✗ platformio missing"; exit 1; }
       
       - name: Build firmware
