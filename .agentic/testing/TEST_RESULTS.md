@@ -154,14 +154,14 @@ Phase 6 (main loop integration) verified operational.
 ## Commands for Testing
 
 ```bash
-# Monitor debug output
-python3 test/hid_monitor.py --serial
+# Monitor debug output (serial)
+python3 test/debug_joystick.py
 
 # Send MIDI commands (in separate terminal)
-python3 test/midi_debug.py
+python3 test/debug_midi.py
 
 # Run full test suite
-timeout 180 python3 test/test_suite.py
+python3 test/test_suite_automated.py
 ```
 
 ---

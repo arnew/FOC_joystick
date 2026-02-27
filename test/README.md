@@ -128,11 +128,16 @@ See [.agentic/TUNING_QUALITY_ANALYSIS.md](../.agentic/TUNING_QUALITY_ANALYSIS.md
 
 | File | Purpose |
 |------|---------|
-| `test_suite_automated.py` | Full automated test suite (no user interaction required) |
-| `debug_joystick.py` | Minimalistic joystick monitor |
-| `debug_midi.py` | Minimalistic MIDI command sender |
-| `midi_controller.py` | Advanced MIDI controller with menu (legacy) |
-| `hid_monitor.py` | Pygame-based HID joystick monitor (legacy) |
+| `test_suite_automated.py` | Full automated test suite (no user interaction) |
+| `test_hid_report.py` | Pytest: HID joystick presence detection |
+| `test_hid_exercise.py` | Pytest: MIDI→motor→HID integration test |
+| `test_sim_device.py` | Pytest: Headless simulator tests |
+| `debug_joystick.py` | Interactive: Monitor motor angle via serial debug |
+| `debug_midi.py` | Interactive: Send MIDI CC commands |
+| `hid_monitor.py` | Interactive: Monitor HID via pygame |
+| `motor_monitor.py` | Library: High-speed motor monitoring (used by test suite) |
+| `sim_device.py` | Library: Headless device simulator |
+| `calibrate_pid.py` | Tool: Auto-tune PID gains + quality assessment |
 | `test_config.cpp` | Unit tests for configuration (TODO) |
 
 ## Setup
