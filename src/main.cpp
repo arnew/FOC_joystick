@@ -98,10 +98,10 @@ void loop() {
     last_hid = now;
   }
   
-  // 5. Debug output (~100Hz)
+  // 5. Debug output (1 Hz)
   static unsigned long last_debug = 0;
   
-  if (now - last_debug >= 10) {
+  if (now - last_debug >= 1000) {
     Serial.print("A=");
     Serial.print(get_motor_angle(0), 2);
     Serial.print(" T=");

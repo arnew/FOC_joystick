@@ -82,7 +82,11 @@ void process_midi_message(uint8_t status,
   // Set motor target
   set_motor_target(axis->motor_id, target);
   
-  // Debug output
+  // Debug output (commented to prevent USB CDC spam)
+  // Rapid MIDI messages (e.g., trim wheel) can flood USB with 10-20 msgs/sec
+  // Each message = 12 Serial.print() calls = 120-240 USB transactions/sec
+  // Uncomment for debugging, but expect USB instability with continuous input
+  /*
   Serial.print("MIDI: CC#");
   Serial.print(cc_number);
   Serial.print(" = ");
@@ -93,4 +97,5 @@ void process_midi_message(uint8_t status,
   Serial.print(axis->motor_id);
   Serial.print(" angle: ");
   Serial.println(target, 4);
+  */
 }
