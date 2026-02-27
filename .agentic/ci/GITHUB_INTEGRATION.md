@@ -129,7 +129,7 @@ gh workflow run "Hardware Test" --repo arnew/FOC_joystick -r feature/my-feature
 # Simple issue
 gh issue create --repo arnew/FOC_joystick \
   --title "Motor noise on axis Y" \
-  --body "Observed high-frequency jitter. See quality/QUICK_FIX.md"
+  --body "Observed high-frequency jitter. See .agentic/FAILED_EXPERIMENTS.md"
 
 # Reference in commits
 git commit -m "fix(motor_control): reduce PWM frequency

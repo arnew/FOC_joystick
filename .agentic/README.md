@@ -23,10 +23,12 @@
 ├─ PURPOSE.md              ⭐ What this project is
 ├─ AGENT_GUIDELINES.md     ⭐ How agents work
 ├─ KNOWLEDGE_BASE.md       ⭐ Technical baseline
+├─ FAILED_EXPERIMENTS.md   📚 What didn't work (PID tuning, dual-motor)
+├─ REMOVED_UNTESTED_CODE.md 📚 Code cleanup history
+├─ USB_STABILITY_ISSUE.md  🔧 USB bandwidth fix details
 ├─ architecture/           System design, build procedures
 ├─ ci/                     GitHub workflows, `gh` CLI
-├─ tuning/                 PID calibration (implementation + guides)
-├─ quality/                Performance evaluation & fixes
+├─ tuning/                 SimpleFOC integration guides
 ├─ testing/                Hardware issues & test results
 └─ sessions/               Development session notes
 ```
@@ -41,8 +43,8 @@
 - **Code refactoring?** → [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md)
 - **Tuning motors?** → [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md)
 - **GUI tuning?** → [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md)
-- **Motor noisy/unstable?** → [quality/QUICK_FIX.md](quality/QUICK_FIX.md)
-- **Real-time tuning?** → [tuning/guides/ONLINE_PARAMETER_TRANSFER.md](tuning/guides/ONLINE_PARAMETER_TRANSFER.md)
+- **What experiments failed?** → [FAILED_EXPERIMENTS.md](FAILED_EXPERIMENTS.md)
+- **What code was removed?** → [REMOVED_UNTESTED_CODE.md](REMOVED_UNTESTED_CODE.md)
 - **Fixing issues?** → [testing/TESTING_FINDINGS.md](testing/TESTING_FINDINGS.md)
 
 ---
