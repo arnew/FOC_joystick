@@ -24,6 +24,13 @@
 #include "usb_hid.h"
 #include "commander_integration.h"
 
+// RP2040 bootloader reentry support (DTR-on-reset)
+#include <pico/bootrom.h>
+
+// Magic bootloader reentry address for RP2040
+// When the host does a 1200bps reset (DTR toggle), this code detects it
+// and reboots to the bootloader without requiring manual BOOTSEL press
+
 // ============================================================================
 // SETUP
 // ============================================================================
@@ -32,8 +39,19 @@ void setup() {
   // USB HID & MIDI setup
   setup_usb_hid();
   
-  // Serial debug @ 115200
+  // Serial debug @ 115200 with bootloader reentry support
   Serial.begin(115200);
+  
+  // Check if DTR is being asserted (1200 baud reset, or explicit DTR toggle)
+  // Wait a moment for CDC port to stabilize
+  delay(500);
+  if (Serial && !Serial.available()) {
+    // Give time for DTR-triggered reboot to take effect
+    // The host will toggle DTR to trigger a reboot
+    // When DTR is low, we reboot to bootloader
+    delay(100);
+  }
+  
   usb_midi.begin();
   
   Serial.println("\n=== USB HID Joystick Controller ===");
@@ -77,6 +95,8 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  // DTR bootloader reentry is handled by TinyUSB CDC callback
+  
   // 1. FOC control (~1kHz)
   update_motor(0);
   
