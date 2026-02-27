@@ -21,6 +21,9 @@
 - Testing during development is encouraged
 - Tests must pass before merging
 - Use pytest with hardware markers
+- CI is the authoritative test environment for this project
+- Do not ask the human user to run tests for agent verification
+- If local tests are run by an agent, treat them as pre-checks only; final validation is CI
 
 ### Agent-Positive
 - ✅ Agents plan and execute without asking (unless design decision)

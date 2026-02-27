@@ -8,6 +8,11 @@ Tools and workflows for automated testing, cloud validation, and agentic GitHub 
 
 ## Current Infrastructure
 
+**Validation policy**:
+- CI is the source of truth for test pass/fail.
+- The human user cannot run tests for agent tasks; agents must rely on CI results.
+- Local runs by agents are optional pre-checks, not acceptance criteria.
+
 **Workflows** (3 tiers + 1 manual):
 - **Code Quality** (`ubuntu-latest`): function size check + PIO build
 - **Headless Test** (`ubuntu-latest`): pytest unit tests, simulator, no hardware  
@@ -51,12 +56,14 @@ gh workflow run manual-hardware-test.yml \
 - `sweep` — Motor sweep range and tracking
 - `dynamics` — High-speed dynamics (requires --enable-monitor)
 
-**Local testing**:
+**Local testing (agent pre-check only)**:
 ```bash
 cd test
 python3 test_suite_automated.py --tests midi sweep  # Run specific tests
 python3 test_suite_automated.py                     # Run all tests
 ```
+
+Do not require or request local test execution from the human user. Use CI/manual CI workflows for verification.
 
 ## Self-Hosted Runner Requirements
 
