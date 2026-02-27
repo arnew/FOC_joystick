@@ -36,30 +36,20 @@
 // ============================================================================
 
 void setup() {
-  // USB HID & MIDI setup
+  // Initialize USB/Serial FIRST (before motor init) for bootloader reentry
   setup_usb_hid();
-  
-  // Serial debug @ 115200 with bootloader reentry support
   Serial.begin(115200);
-  
-  // Check if DTR is being asserted (1200 baud reset, or explicit DTR toggle)
-  // Wait a moment for CDC port to stabilize
-  delay(500);
-  if (Serial && !Serial.available()) {
-    // Give time for DTR-triggered reboot to take effect
-    // The host will toggle DTR to trigger a reboot
-    // When DTR is low, we reboot to bootloader
-    delay(100);
-  }
-  
   usb_midi.begin();
+  
+  // Wait for CDC interface to register (enables DTR callback)
+  delay(500);
   
   Serial.println("\n=== USB HID Joystick Controller ===");
   Serial.println("USB: CDC /dev/ttyACM0 (115200)");
   Serial.println("     Native MIDI port");
   Serial.println("     HID Joystick (8btn + 2axis)");
   
-  // Initialize Motor 0
+  // NOW initialize motor (after USB is fully ready)
   Serial.println("Initializing Motor 0...");
   init_motor(0);
   Serial.println("Motor 0 ready");

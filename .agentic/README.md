@@ -6,28 +6,41 @@
 
 ---
 
+## ⚠️ START HERE (Required Reading)
+
+**Before starting any work, read these in order:**
+
+1. **[PURPOSE.md](PURPOSE.md)** - Project goals, hardware, success criteria
+2. **[AGENT_GUIDELINES.md](AGENT_GUIDELINES.md)** - How agents should behave, decision framework, anti-patterns
+3. **[KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)** - Working baseline, known issues, technical details
+
+---
+
 ## Quick Navigation
 
 ```
 .agentic/
-├─ architecture/     System design, build procedures, code style
-├─ ci/               GitHub workflows, `gh` CLI, CI monitoring
-├─ tuning/          PID calibration (implementation + guides)
-├─ quality/         Performance evaluation & fixes
-├─ testing/         Hardware issues & test results
-└─ sessions/        Development session notes
+├─ PURPOSE.md              ⭐ What this project is
+├─ AGENT_GUIDELINES.md     ⭐ How agents work
+├─ KNOWLEDGE_BASE.md       ⭐ Technical baseline
+├─ architecture/           System design, build procedures
+├─ ci/                     GitHub workflows, `gh` CLI
+├─ tuning/                 PID calibration (implementation + guides)
+├─ quality/                Performance evaluation & fixes
+├─ testing/                Hardware issues & test results
+└─ sessions/               Development session notes
 ```
 
 ---
 
 ## Getting Started Paths
 
-- **New to project?** → [architecture/PLANNING.md](architecture/PLANNING.md) → [architecture/QUICKSTART.md](architecture/QUICKSTART.md)
-- **Need to build?** → [architecture/QUICKSTART.md](architecture/QUICKSTART.md)
+- **New to project?** → [PURPOSE.md](PURPOSE.md) → [AGENT_GUIDELINES.md](AGENT_GUIDELINES.md) → [KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)
+- **Need to build?** → [KNOWLEDGE_BASE.md#working-baseline](KNOWLEDGE_BASE.md#working-baseline)
 - **Testing & CI workflow?** → [ci/GITHUB_INTEGRATION.md](ci/GITHUB_INTEGRATION.md)
 - **Code refactoring?** → [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md)
 - **Tuning motors?** → [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md)
-- **GUI tuning?** → [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md) (SimpleFOC Studio)
+- **GUI tuning?** → [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md)
 - **Motor noisy/unstable?** → [quality/QUICK_FIX.md](quality/QUICK_FIX.md)
 - **Real-time tuning?** → [tuning/guides/ONLINE_PARAMETER_TRANSFER.md](tuning/guides/ONLINE_PARAMETER_TRANSFER.md)
 - **Fixing issues?** → [testing/TESTING_FINDINGS.md](testing/TESTING_FINDINGS.md)
