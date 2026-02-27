@@ -14,7 +14,7 @@ Functions stay small, ideally fit on one monitor page (80x25 to 132x43).
 
 **Development Model**: 
 Git-flow. We use the "git flow" tool. All changes must be developed in feature/ or hotfix/ branches, development is done in dev, releases are kept in main, releases are prepared in release/.
-Test-driven. All changes must pass automated tests. Testing is wanted during development, before merging a branch or creating a release tests must be successful.
+Test-driven. A test is only considered successfull when run on the CI. All changes must pass automated tests. Testing is wanted during development, before merging a branch or creating a release tests must be successful.
 Agent-positive. 
  - The agent creates commits and merges code using its own name. Agents push/pull. Agents use the github integration.
  - Agents plan and execute without asking (unless design decision or stuck).
