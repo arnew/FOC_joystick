@@ -22,7 +22,6 @@ from serial.tools import list_ports
 
 # Import high-speed monitor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from motor_monitor import HighSpeedMonitor
 
 try:
     import pygame.midi
@@ -589,49 +588,22 @@ class HIDControllerTestSuite:
         return True
 
     def test_motor_dynamics_highspeed(self):
-        """Test 5b (Optional): High-speed motor dynamics capture (100+ Hz)
-        
-        Uses HighSpeedMonitor to capture motor position and velocity at fast rate.
-        Useful for detailed tuning and diagnostics.
+        """Test 5b (Removed): High-speed motor dynamics capture
+
+        REMOVED: High-speed monitoring tool removed (motor_monitor.py).
+        Reason: Requires 10-100 Hz sampling incompatible with 1 Hz USB debug rate.
+        See .agentic/FAILED_EXPERIMENTS.md for details.
         """
         if not self.debug_ser:
             print("⊘ SKIP: Debug serial not available for high-speed monitoring")
             return None
         
         print("\n" + "=" * 70)
-        print("TEST 5B: High-Speed Motor Dynamics (Optional)")
+        print("TEST 5B: High-Speed Motor Dynamics (REMOVED)")
         print("=" * 70)
-        
-        if not self.midi_output and not self.midi_ser:
-            print("⊘ SKIP: MIDI port not available")
-            return None
-        
-        try:
-            print("Monitoring motor dynamics at 100+ Hz for 5 seconds...")
-            monitor = HighSpeedMonitor(self.debug_ser)
-            
-            samples = monitor.collect_samples(duration=5.0, target_hz=100)
-            
-            if len(samples) < 5:
-                print(f"⊘ SKIP: Only {len(samples)} samples collected (need 5+)")
-                return None
-            
-            stats = monitor.get_stats()
-            if stats:
-                print(f"\n✓ Collected {stats['count']} samples over {stats['duration']:.2f}s")
-                print(f"  Sample rate: {stats['sample_rate']:.1f} Hz")
-                print(f"  Angle range: {stats['angle_min']:.4f} → {stats['angle_max']:.4f} rad")
-                print(f"  Velocity: avg={stats['velocity_mean']:.4f}, max={stats['velocity_max']:.4f} rad/s")
-                
-                self.results.append(("Motor Dynamics", True, f"{stats['sample_rate']:.0f} Hz"))
-                return True
-            else:
-                print("✓ High-speed monitor collected data")
-                self.results.append(("Motor Dynamics", True, None))
-                return True
-        except Exception as e:
-            print(f"⚠ High-speed monitoring error: {e}")
-            return None
+        print("⊘ SKIP: High-speed monitoring removed (incompatible with USB stability)")
+        print("        See .agentic/FAILED_EXPERIMENTS.md")
+        return None
 
     def print_results(self):
         """Print test results summary"""
