@@ -18,5 +18,8 @@ Agent-positive.
 Human-decides. Only the human merges (runs "git flow finish").
 Human-defaults. The repo stays immediately usable for humans.
 
+**GitHub & CI**:
+See [.agentic/ci/](​.agentic/ci/README.md) for full `gh` CLI workflow, CI monitoring, on-demand testing, and issue tracking.
+
 **Agentic Knowledge**:
 Knowledge goes as graph database into .agentic/. Every folder in there gets a README.md index, linking to subfolders.

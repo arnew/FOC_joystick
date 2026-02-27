@@ -11,6 +11,7 @@
 ```
 .agentic/
 ├─ architecture/     System design, build procedures, code style
+├─ ci/               GitHub workflows, `gh` CLI, CI monitoring
 ├─ tuning/          PID calibration (implementation + guides)
 ├─ quality/         Performance evaluation & fixes
 ├─ testing/         Hardware issues & test results
@@ -23,6 +24,7 @@
 
 - **New to project?** → [architecture/PLANNING.md](architecture/PLANNING.md) → [architecture/QUICKSTART.md](architecture/QUICKSTART.md)
 - **Need to build?** → [architecture/QUICKSTART.md](architecture/QUICKSTART.md)
+- **Testing & CI workflow?** → [ci/GITHUB_INTEGRATION.md](ci/GITHUB_INTEGRATION.md)
 - **Code refactoring?** → [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md)
 - **Tuning motors?** → [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md)
 - **GUI tuning?** → [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md) (SimpleFOC Studio)
