@@ -211,6 +211,35 @@ static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
 }
 
 /**
+ * Find first axis profile by motor ID
+ * @param motor_id Motor index (0-1)
+ * @return Pointer to first AxisProfile for motor, NULL if none found
+ */
+static inline const AxisProfile* find_axis_by_motor(uint8_t motor_id) {
+  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
+    if (A320_CONFIG[i].motor_id == motor_id) {
+      return &A320_CONFIG[i];
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Count number of axes controlled by a motor
+ * @param motor_id Motor index (0-1)
+ * @return Number of axes assigned to motor
+ */
+static inline uint8_t count_axes_for_motor(uint8_t motor_id) {
+  uint8_t count = 0;
+  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
+    if (A320_CONFIG[i].motor_id == motor_id) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
  * Convert MIDI CC value (0-127) to motor angle (min-max degrees)
  * @param axis Axis profile
  * @param cc_value MIDI CC value (0-127)
