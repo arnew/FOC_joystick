@@ -41,6 +41,7 @@
 - 🔄 SimpleFOC Studio integration planned (replace custom protocol)
 - ⚠️ Motor reliability issues identified (see [sessions/](sessions/))
 - 🔄 4/6 automated tests passing
+- ✅ Headless pytest gated by `RUN_HARDWARE_TESTS=1`
 
 ---
 

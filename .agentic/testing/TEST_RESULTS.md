@@ -170,3 +170,35 @@ timeout 180 python3 test/test_suite.py
 **Firmware**: pico_1motor_endless (HW_CONFIG=0)  
 **Board**: RP2040 mini (AS5600 encoder)  
 **Status**: **READY FOR DEPLOYMENT**
+
+---
+
+# Test Results - February 27, 2026 (Headless)
+
+## Environment
+
+- Runner without attached hardware
+- Headless pytest execution
+
+## Result
+
+- `pytest -q`: PASS with hardware tests skipped
+
+## Notes
+
+- Hardware tests are gated by `RUN_HARDWARE_TESTS=1`.
+
+---
+
+# HIL Test Status - February 27, 2026
+
+## Status
+
+- Pending: requires self-hosted runner with attached hardware
+
+## How To Run
+
+```bash
+platformio run -e pico_1motor_endless --target upload
+SERIAL_PORT=/dev/ttyACM0 ./test/run_ci_tests.sh
+```

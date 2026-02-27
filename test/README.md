@@ -19,6 +19,20 @@ This tests:
 - ✓ Joystick output scaling (0-1023 range)
 - ✓ Motor sweep with MIDI
 
+### Pytest (Headless)
+
+Run Python tests without hardware:
+
+```bash
+python -m pytest -q
+```
+
+Hardware-dependent tests are skipped by default. To run hardware tests (requires device + pygame):
+
+```bash
+RUN_HARDWARE_TESTS=1 python -m pytest -q
+```
+
 ### Debug Tools (Interactive)
 
 **Monitor joystick output:**
@@ -30,6 +44,14 @@ Shows real-time motor angle and joystick value with visual progress bar.
 **Send MIDI commands:**
 ```bash
 python3 test/debug_midi.py
+```
+
+### Headless Simulator
+
+Use the simulator to validate CC-to-joystick mapping without hardware:
+
+```bash
+python -m pytest -q
 ```
 Interactive menu to send individual MIDI CC messages or sweeps.
 

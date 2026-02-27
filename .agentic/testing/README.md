@@ -8,6 +8,7 @@ Hardware issues, test results, and validation.
 
 - [TESTING_FINDINGS.md](TESTING_FINDINGS.md) - Hardware issues & fixes (dual CDC, encoder)
 - [TEST_RESULTS.md](TEST_RESULTS.md) - Latest automated test status
+- [HEADLESS_TESTING.md](HEADLESS_TESTING.md) - CI-safe tests without hardware
 
 ---
 

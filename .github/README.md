@@ -8,12 +8,19 @@ This repository uses a self-hosted GitHub runner with attached RP2040 hardware f
 
 1. **Hardware Test** (`.github/workflows/hardware-test.yml`)
    - Triggers: Push to `dev`, `feature/*` branches, PRs to `dev`/`main`
-   - Runs on: `self-hosted` runner
+   - Runs on: `self-hosted` runner with `hardware` label
    - Steps:
      1. Build firmware (`platformio run`)
      2. Upload to device (`platformio run --target upload`)
      3. Run automated test suite (`test/run_ci_tests.sh`)
      4. Upload test artifacts
+
+2. **Headless Test** (`.github/workflows/headless-test.yml`)
+   - Triggers: Push to `dev`, `feature/*` branches, PRs to `dev`/`main`
+   - Runs on: `ubuntu-latest` (GitHub-hosted)
+   - Steps:
+     1. Install Python dependencies (`pytest`, `pyserial`)
+     2. Run `pytest -q` (hardware tests skipped)
 
 2. **Code Quality** (`.github/workflows/code-quality.yml`)
    - Triggers: Push to `dev`, `feature/*` branches, PRs to `dev`/`main`
@@ -27,6 +34,18 @@ This repository uses a self-hosted GitHub runner with attached RP2040 hardware f
 **Hardware:**
 - RP2040 Pico connected via USB
 - Device available at `/dev/ttyACM0`
+- Runner has `hardware` label
+
+### HIL Verification (Manual)
+
+On the self-hosted runner with attached hardware:
+
+```bash
+platformio run -e pico_1motor_endless --target upload
+SERIAL_PORT=/dev/ttyACM0 ./test/run_ci_tests.sh
+```
+
+Expected: `=== All tests passed ===` in output.
 
 **Software:**
 - Python 3.11+

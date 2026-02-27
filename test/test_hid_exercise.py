@@ -13,14 +13,20 @@ import os
 import time
 import sys
 
+PYGAME_AVAILABLE = True
+PYGAME_ERROR = None
 try:
     import pygame
     import pygame.midi
 except ImportError as e:
-    print(f"ERROR: pygame or pygame.midi not available: {e}")
-    sys.exit(2)
+    PYGAME_AVAILABLE = False
+    PYGAME_ERROR = str(e)
 
 TIMEOUT = int(os.environ.get("HID_WAIT_TIMEOUT", "10"))
+
+
+def _hardware_enabled():
+    return os.environ.get("RUN_HARDWARE_TESTS") == "1"
 
 
 def find_native_midi_output():
@@ -85,17 +91,25 @@ def read_axes(js, n=2):
     return vals
 
 
-def main():
+def run_test():
+    if not _hardware_enabled():
+        print("SKIP: Hardware tests disabled. Set RUN_HARDWARE_TESTS=1 to run.")
+        return 0
+
+    if not PYGAME_AVAILABLE:
+        print(f"SKIP: pygame or pygame.midi not available: {PYGAME_ERROR}")
+        return 0
+
     midi_output = find_native_midi_output()
     if not midi_output:
-        print("✗ FAIL: No native USB MIDI output found")
-        sys.exit(2)
+        print("FAIL: No native USB MIDI output found")
+        return 2
 
     js = probe_pygame()
     if not js:
-        print("✗ SKIP: No joystick device via pygame")
+        print("SKIP: No joystick device via pygame")
         midi_output.close()
-        sys.exit(0)
+        return 0
 
     # Sample baseline
     baseline = read_axes(js, n=2)
@@ -106,7 +120,7 @@ def main():
     try:
         send_midi_cc(midi_output, 64, 0)
     except:
-        sys.exit(2)
+        return 2
     time.sleep(0.35)
     a0 = read_axes(js, n=2)
     print(f"After CC=0 axes: {a0}")
@@ -115,7 +129,7 @@ def main():
     try:
         send_midi_cc(midi_output, 64, 127)
     except:
-        sys.exit(2)
+        return 2
     # allow motor + HID update
     time.sleep(0.5)
     a1 = read_axes(js, n=2)
@@ -126,7 +140,7 @@ def main():
     # Evaluate significant axis change on axis 0
     if not baseline or not a0 or not a1:
         print("✗ FAIL: Unable to read axes")
-        sys.exit(2)
+        return 2
 
     d0 = abs(a0[0] - baseline[0])
     d1 = abs(a1[0] - baseline[0])
@@ -136,11 +150,26 @@ def main():
 
     if max_delta > 0.4:
         print("✓ PASS: Axis moved significantly after MIDI commands")
-        sys.exit(0)
+        return 0
     else:
-        print("✗ FAIL: Axis did not change sufficiently")
-        sys.exit(2)
+        print("FAIL: Axis did not change sufficiently")
+        return 2
+
+
+def main():
+    return run_test()
+
+
+def test_hid_exercise():
+    import pytest
+
+    if not _hardware_enabled():
+        pytest.skip("Hardware tests disabled. Set RUN_HARDWARE_TESTS=1.")
+    if not PYGAME_AVAILABLE:
+        pytest.skip(f"pygame or pygame.midi not available: {PYGAME_ERROR}")
+
+    assert run_test() == 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
