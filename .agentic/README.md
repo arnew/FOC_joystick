@@ -1,92 +1,56 @@
 # Agent Knowledge Base
 
-**Purpose**: Graph database of agent knowledge for USB HID joystick controller with dual motorized axes and MIDI input.
-
-**Status**: Living documentation updated with each development phase.
+**Purpose**: Agent-accessible documentation for autonomous development
 
 ---
 
-## Quick Navigation
+## ⚠️ START HERE (Required Reading)
+
+**Before starting any work, read these in order:**
+
+1. **[PURPOSE.md](PURPOSE.md)** - Project goals, hardware, success criteria
+2. **[AGENT_GUIDELINES.md](AGENT_GUIDELINES.md)** - How agents should behave, decision framework, anti-patterns
+3. **[KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)** - Working baseline, known issues, technical details
+
+---
+
+## Directory Structure
 
 ```
 .agentic/
-├─ architecture/     System design, build procedures, code style
-├─ tuning/          PID calibration (implementation + guides)
-├─ quality/         Performance evaluation & fixes
-├─ testing/         Hardware issues & test results
-└─ sessions/        Development session notes
+├── PURPOSE.md              ⭐ What this project is
+├── AGENT_GUIDELINES.md     ⭐ How agents work
+├── KNOWLEDGE_BASE.md       ⭐ Technical baseline
+├── README.md               (this file)
+├── ci/                     GitHub workflows, automation
+├── testing/                Test infrastructure and results
+└── sessions/               Development session notes
 ```
 
 ---
 
-## Getting Started Paths
+## Quick Links
 
-- **New to project?** → [architecture/PLANNING.md](architecture/PLANNING.md) → [architecture/QUICKSTART.md](architecture/QUICKSTART.md)
-- **Need to build?** → [architecture/QUICKSTART.md](architecture/QUICKSTART.md)
-- **Code refactoring?** → [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md)
-- **Tuning motors?** → [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md)
-- **GUI tuning?** → [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md) (SimpleFOC Studio)
-- **Motor noisy/unstable?** → [quality/QUICK_FIX.md](quality/QUICK_FIX.md)
-- **Real-time tuning?** → [tuning/guides/ONLINE_PARAMETER_TRANSFER.md](tuning/guides/ONLINE_PARAMETER_TRANSFER.md)
-- **Fixing issues?** → [testing/TESTING_FINDINGS.md](testing/TESTING_FINDINGS.md)
+### Essential Reading
+1. [Project Purpose](PURPOSE.md) - Goals and success criteria
+2. [Agent Guidelines](AGENT_GUIDELINES.md) - Decision framework and anti-patterns
+3. [Technical Knowledge](KNOWLEDGE_BASE.md) - Working baseline and known issues
 
----
+### Development
+- [Working Baseline](KNOWLEDGE_BASE.md#working-baseline) - Current feature/modularize-main state
+- [Known Issues](KNOWLEDGE_BASE.md#known-issues) - TinyUSB bootloader, etc.
+- [Build Commands](KNOWLEDGE_BASE.md#working-baseline) - How to compile and upload
 
-## Current Status (February 2026)
-
-**Development Model**: Git-flow with feature branches, experiments documented in sessions/
-
-**Active Branches**:
-| Branch | Status | Description |
-|--------|--------|-------------|
-| `feature/modularize-main` | ✅ Working baseline | SimpleFOC + knowledge base + CI framework |
-| `feature/hid-report` | ✅ Ready for testing | Full HID+MIDI+SimpleFOC integration |
-| `feature/tinyusb-minimal` | ✅ Completed | Minimal HID-only for bootloader isolation |
-| `experiment/tinyusb_bootloader` | ✅ **BREAKTHROUGH** | Bootloader reentry verified working! |
-
-**Recent Breakthrough** (2026-02-27):
-- 🎯 **Bootloader reentry NOW WORKS** via automatic 1200bps DTR reset
-- Was documented as critical blocker requiring manual BOOTSEL
-- Multiple fix attempts failed (DTR callbacks, timing adjustments)
-- Silently resolved by earlephilhower toolchain updates
-- 5/5 sequential reboots successful in automated testing
-- **Impact**: Fully automated CI/CD now possible without manual intervention
-
-**Project State**:
-- ✅ SimpleFOC motor control baseline working
-- ✅ USB HID joystick implementation complete
-- ✅ MIDI command parsing ready (skeleton present)
-- ✅ TinyUSB configuration correct (HID + MIDI + CDC)
-- ✅ Test infrastructure established (headless + hardware markers)
-- ✅ Knowledge base comprehensive (all experiments documented)
-- ⏳ Hardware integration testing pending (motor wiring on CI runner)
-- ⏳ MSFS companion script integration (next phase)
-
-**All Experiments Documented**: See [KNOWLEDGE_BASE.md#experiments](KNOWLEDGE_BASE.md#experiments-branch-history) for complete history across all branches
+### Testing
+- [Test Strategy](KNOWLEDGE_BASE.md#testing-strategy) - Headless vs hardware tests
+- [CI/CD Pipeline](KNOWLEDGE_BASE.md#cicd-pipeline) - GitHub Actions workflows
 
 ---
 
-## Key Documents by Use Case
+## Navigation
 
-| Use Case | Primary Reference |
-|----------|------------------|
-| System architecture | [architecture/PLANNING.md](architecture/PLANNING.md) |
-| Build & upload firmware | [architecture/QUICKSTART.md](architecture/QUICKSTART.md) |
-| Code refactoring plan | [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md) |
-| Code style guidelines | [architecture/README.md](architecture/README.md) |
-| Calibrate motor | [tuning/guides/DUAL_LOOP_TUNING.md](tuning/guides/DUAL_LOOP_TUNING.md) |
-| GUI tuning (planned) | [tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md](tuning/implementation/SIMPLEFOC_STUDIO_PLAN.md) |
-| Real-time tuning | [tuning/guides/ONLINE_PARAMETER_TRANSFER.md](tuning/guides/ONLINE_PARAMETER_TRANSFER.md) |
-| Fix noisy motor | [quality/QUICK_FIX.md](quality/QUICK_FIX.md) |
-| Understand test failures | [testing/TEST_RESULTS.md](testing/TEST_RESULTS.md) |
-| Latest implementation | [tuning/implementation/DUAL_LOOP_IMPLEMENTATION.md](tuning/implementation/DUAL_LOOP_IMPLEMENTATION.md) |
+Each subdirectory contains its own README.md with links to related documentation:
 
----
-
-## File Naming Conventions
-
-- `README.md` - Folder index (required in each folder)
-- `IMPLEMENTATION.md` - Technical implementation details
-- `GUIDE.md` / `TUNING.md` - User-facing how-to docs
-- `RESULTS.md` / `FINDINGS.md` - Measurement data & observations
-- `SUMMARY.md` - Session/feature summaries
+- `ci/README.md` - CI/CD workflows and GitHub integration
+- `testing/README.md` - Test infrastructure and findings
+- `sessions/README.md` - Session summaries and progress tracking
