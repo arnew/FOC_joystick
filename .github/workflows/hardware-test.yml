@@ -33,9 +33,31 @@ jobs:
       
       - name: Build firmware
         run: platformio run -e pico_1motor_endless
+
+      - name: Ensure upload port is free
+        run: |
+          echo "Checking upload port: /dev/ttyACM0"
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -v /dev/ttyACM0 || true
+            pids="$(fuser /dev/ttyACM0 2>/dev/null || true)"
+            if [ -n "$pids" ]; then
+              echo "Terminating processes using /dev/ttyACM0: $pids"
+              kill -TERM $pids || true
+              sleep 1
+              kill -KILL $pids || true
+            fi
+            fuser -v /dev/ttyACM0 || true
+          fi
+          udevadm settle || true
       
       - name: Upload firmware to device
-        run: platformio run -e pico_1motor_endless --target upload
+        run: |
+          platformio run -e pico_1motor_endless --target upload || {
+            echo "Upload failed once; retrying after short settle..."
+            sleep 2
+            udevadm settle || true
+            platformio run -e pico_1motor_endless --target upload
+          }
       
       - name: Wait for device reset
         run: sleep 3
