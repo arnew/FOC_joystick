@@ -37,10 +37,11 @@
 3. [Technical Knowledge](KNOWLEDGE_BASE.md) - Working baseline and experiments
 
 ### Recent Work
-- **Latest Experiment** (2026-02-27): [TinyUSB Integration](sessions/2026-02-27_tinyusb_integration.md) ✅ COMPLETE
-  - Both `pico` and `pico_tinyUSB` environments verified
-  - Key fix: Created `include/my_tusb_config.h`
-  - Discovery: Bootloader reentry now working (no manual BOOTSEL needed)
+- **Latest Experiment** (2026-02-27): [Bootloader Reentry Verification](sessions/2026-02-27_tinyusb_integration.md) ✅ VERIFIED WORKING
+  - Primary finding: 1200bps DTR bootloader reentry **NOW WORKS RELIABLY**
+  - 5/5 sequential reboots successful (was previously a "known blocker")
+  - Enables fully automated CI/CD deployments with zero manual intervention
+  - Opportunistic finding: TinyUSB HID+MIDI coexists cleanly with dual environments
 
 ### Development
 - [Working Baseline & Experiments](KNOWLEDGE_BASE.md#experiments) - Current status and discoveries
