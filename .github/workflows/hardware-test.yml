@@ -43,14 +43,6 @@ jobs:
             echo "skip_upload=${{ github.event.inputs.skip_upload }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Cache PlatformIO
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio
-            .pio
-          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
-
       - name: Set up Python
         run: |
           if ! command -v python3 &> /dev/null; then
