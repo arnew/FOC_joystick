@@ -14,7 +14,9 @@ import sys
 import re
 import glob
 import os
+import json
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 from serial.tools import list_ports
 
@@ -589,7 +591,37 @@ class HIDControllerTestSuite:
         
         return failed == 0
 
-    def run_all(self):
+    def write_results_json(self, json_out, success):
+        """Write structured test results for CI artifacts"""
+        if not json_out:
+            return
+
+        status_map = {True: "pass", False: "fail", None: "skip"}
+        report = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "debug_port": self.debug_port,
+            "midi_port": self.midi_port,
+            "enable_monitor": self.enable_monitor,
+            "success": bool(success),
+            "summary": {
+                "passed": sum(1 for _, s, _ in self.results if s is True),
+                "failed": sum(1 for _, s, _ in self.results if s is False),
+                "skipped": sum(1 for _, s, _ in self.results if s is None),
+                "total": len(self.results),
+            },
+            "results": [
+                {"test": name, "status": status_map[state], "note": note}
+                for name, state, note in self.results
+            ],
+            "firmware_info": self.firmware_info,
+        }
+
+        output_path = Path(json_out)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        print(f"Wrote JSON results: {output_path}")
+
+    def run_all(self, json_out=None):
         """Run all tests"""
         print("\n" + "=" * 70)
         print("USB HID JOYSTICK CONTROLLER - AUTOMATED TEST SUITE")
@@ -597,6 +629,7 @@ class HIDControllerTestSuite:
         
         if not self.connect():
             print("Failed to connect to device")
+            self.write_results_json(json_out, False)
             return False
         
         try:
@@ -613,7 +646,7 @@ class HIDControllerTestSuite:
             
             # Print summary
             all_pass = self.print_results()
-            
+            self.write_results_json(json_out, all_pass)
             return all_pass
         finally:
             self.close()
@@ -636,6 +669,7 @@ def main():
     )
     parser.add_argument("--debug-port", help="Serial port for debug output")
     parser.add_argument("--midi-port", help="Serial port for MIDI input")
+    parser.add_argument("--json-out", help="Write structured JSON test report to this path")
     
     args = parser.parse_args()
     
@@ -644,7 +678,7 @@ def main():
         midi_port=args.midi_port,
         enable_monitor=args.enable_monitor
     )
-    success = suite.run_all()
+    success = suite.run_all(json_out=args.json_out)
     sys.exit(0 if success else 1)
 
 

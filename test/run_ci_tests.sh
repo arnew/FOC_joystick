@@ -2,11 +2,13 @@
 # CI/CD Hardware Test Runner
 # Runs automated test suite on self-hosted runner with attached hardware
 
-set -e
+set -eo pipefail
 
 SERIAL_PORT=${SERIAL_PORT:-/dev/ttyACM0}
 MIDI_PORT=${MIDI_PORT:-}
 TEST_DIR=$(dirname "$0")
+LOG_FILE=${LOG_FILE:-ci_hardware_test.log}
+JSON_FILE=${JSON_FILE:-ci_hardware_test.json}
 
 echo "=== Hardware Test Suite ==="
 echo "Serial port: $SERIAL_PORT"
@@ -27,13 +29,25 @@ if [ ! -e "$SERIAL_PORT" ]; then
     exit 1
 fi
 
-# Run automated test suite
+# Run automated test suite and always emit artifacts
 cd "$TEST_DIR"
+args=(test_suite_automated.py --debug-port "$SERIAL_PORT" --json-out "$JSON_FILE")
 if [ -n "$MIDI_PORT" ]; then
-    python3 test_suite_automated.py --debug-port "$SERIAL_PORT" --midi-port "$MIDI_PORT"
-else
-    python3 test_suite_automated.py --debug-port "$SERIAL_PORT"
+    args+=(--midi-port "$MIDI_PORT")
 fi
 
+set +e
+python3 "${args[@]}" 2>&1 | tee "$LOG_FILE"
+test_exit=${PIPESTATUS[0]}
+set -e
+
 echo ""
-echo "=== All tests passed ==="
+echo "Artifacts written: $TEST_DIR/$LOG_FILE, $TEST_DIR/$JSON_FILE"
+
+if [ "$test_exit" -eq 0 ]; then
+    echo "=== All tests passed ==="
+else
+    echo "=== Tests failed with exit code $test_exit ==="
+fi
+
+exit "$test_exit"
