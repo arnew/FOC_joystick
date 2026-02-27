@@ -21,13 +21,10 @@ Preconfigured use cases are:
 The joystick needs to be used with Microsoft Flight Simulator, sending the Axis data as USB joystick, and sending the configured case as identification of the USB device.
 A companion script is provided that interfaces with the MSFS Scripting  and provides the current position interface from the User Interface of the respective control.
 
-
-
 **Hardware Configurations**:
 Three buildable configurations support different hardware setups:
 - **pico_1motor_endless** — Single endless motor (current hardware, trim-like)
 - **pico_1motor_limited** — Single 0-180° motor (throttle/flaps-like)
-- **pico_2motor_limited** — Dual motors (throttle + trim, future-proof)
 
 Build with: `platformio run -e pico_1motor_endless`
 
