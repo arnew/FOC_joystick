@@ -22,13 +22,26 @@ The current firmware in `src/main.cpp` uses TinyUSB for USB HID + MIDI, but a re
 5. **Layer on**: Add MIDI CC support
 6. **Backport**: Apply working patterns to full `feature/modularize-main`
 
-**⚠️ Manual Device Preparation Required**:
-When pushing code that triggers a hardware test (CI runner will attempt upload):
-- **Agent will pause and notify before each push**
-- **User must press & hold RP2040 BOOTSEL button** during the upload window (typically ~5-10 seconds after upload starts)
-- Release BOOTSEL after upload completes
-- Device will reboot and run the new firmware
-- This is required for picotool to reflash the device
+**⚠️ Manual Device Preparation (TinyUSB Minimal Branch Only)**:
+On `feature/tinyusb-minimal`, uploads require manual BOOTSEL mode because we're debugging bootloader reentry.
+- Hold RP2040 BOOTSEL button when prompted during hardware test
+- This is only needed while fixing the TinyUSB bootloader issue
+
+**Regular Testing (feature/modularize-main)**:
+- No manual intervention needed
+- The running firmware can reboot to bootloader programmatically (see planned firmware command below)
+- CI uploads will work once TinyUSB bootloader reentry is fixed
+
+**Firmware Enhancement (TODO)**:
+Add a command to remotely reboot to bootloader for emergency recovery:
+```cpp
+// In serial/USB command handler:
+if (cmd == "reboot-bootloader") {
+  // Trigger RP2040 bootloader via software reset
+  // Methods: watchdog timer with specific pattern, or USB remote wakeup
+}
+```
+This provides an escape hatch if firmware update fails without needing physical BOOTSEL button.
 
 **Current State**:
 - `feature/modularize-main`: Motor working, upload broken
