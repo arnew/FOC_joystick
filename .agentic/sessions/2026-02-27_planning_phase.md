@@ -71,15 +71,15 @@ git push origin --delete experiment/tinyusb_bootloader
   - Keep as tag reference: `git tag archive/bootloader-verification experiment/tinyusb_bootloader`
 
 ### Branches to Keep 📚
-- **`feature/modularize-main`** → Reference branch
-  - Alternative baseline approach
-  - Documents bootloader fix attempts (valuable for future troubleshooting)
-  - Keep accessible but not active development
-
 - **`usb-interfaces`** → Reference branch
   - MIDI integration history
   - Shows CDC vs Native MIDI exploration
   - Documentation value (lessons learned)
+
+### Branches to Delete ❌
+- **`feature/modularize-main`** → Merge conflicts not worth resolving, knowledge already on dev
+  - Rationale: Cherry-pick conflicts with dev, easier to start fresh from hid-report
+  - Keep: Knowledge documented, bootloader issue analysis captured in KNOWLEDGE_BASE.md
 
 ### Branches to Ignore ⏭️
 - **`main`** → Stable baseline (don't touch)
@@ -131,28 +131,49 @@ gh workflow run hardware-test.yml
 
 ### ⏭️ SHORT TERM (Next Sprint)
 
-**Task 4: Implement MIDI Command Dispatcher**
-- **Location**: `src/main.cpp` - `handle_midi_command()` function (skeleton present)
-- **Scope**: Parse MIDI CC messages → motor commands
-- **Definition**:
+**Task 4: MIDI Integration (CDC + Native USB)** ✅ DECIDED
+- **Location**: `src/main.cpp` - TinyUSB MIDI device + CDC dispatcher
+- **Scope**: 
+  1. Enable native USB MIDI in tusb_config (CFG_TUD_MIDI)
+  2. Poll both native MIDI and CDC MIDI in loop (dual input)
+  3. Parse MIDI CC → motor commands
+- **CC Mapping** (DECIDED - Flight Sim Standard):
+  ```
+  Channel 1:
+  CC#7   (Main Volume) → Motor 0 (Throttle)   : 0-127 → 0-180°
+  CC#5   (Balance)     → Motor 0 (Flaps)      : 0-127 → 0-180°
+  CC#65  (Portamento)  → Motor 0 (Spoilers)   : 0-127 → 0-180°
+  CC#10  (Pan)         → Motor 1 (Trim)       : 0-127 → 0-360° (wrap)
+  CC#11  (Expression)  → Motor 1 (Gear)       : 0-127 → 0-180°
+  ```
+- **Dispatcher Logic**:
   ```cpp
-  void handle_midi_command(uint8_t command, uint8_t control, uint8_t value) {
-    // CC#7 (Throttle) → Motor 0 angle target
-    // CC#5 (Flaps) → Motor 0 angle target  
-    // CC#9 (Spoilers) → Motor 0 angle target
-    // CC#10 (Trim) → Motor 1 angle target
-    // CC#11 (Gear) → Motor 1 angle target
+  void handle_midi_command(uint8_t control, uint8_t value) {
+    float normalized = value / 127.0f;  // 0.0-1.0
+    switch(control) {
+      case 7:  motors[0].target = normalized * 180.0f; break;  // Throttle
+      case 5:  motors[0].target = normalized * 180.0f; break;  // Flaps
+      case 65: motors[0].target = normalized * 180.0f; break;  // Spoilers
+      case 10: motors[1].target = normalized * 360.0f; break;  // Trim (wrap)
+      case 11: motors[1].target = normalized * 180.0f; break;  // Gear
+    }
   }
   ```
+- **Native MIDI Status**: Moving from Task 8 to immediate (decided to implement now)
+  - Will have dual-input: native USB MIDI + CDC serial fallback
+  - Reduces future refactoring work
 - **Owner**: Agent
-- **Effort**: 2 hours (logic + testing)
-- **Blocker**: None
+- **Effort**: 4 hours (native MIDI + CDC + dispatcher + test harness updates)
+- **Blocker**: Test harness may need fallback testing
 - **Success Criteria**:
-  - ✅ MIDI CC received and parsed
-  - ✅ Motor angle targets updated
-  - ✅ Angle ranges correct (0-180° for throttle/flaps, 0-360° for trim)
-  - ✅ Test: Send MIDI CC, verify motor moves
-- **Status**: Ready (skeleton structure in place)
+  - ✅ Native USB MIDI device enumerates
+  - ✅ MIDI CC received (via native or CDC)
+  - ✅ Motor angle targets update correctly
+  - ✅ CC mapping calibrated for flight sim
+  - ✅ Test harness still works (backward compat)
+- **Risk**: Native MIDI breaks test infrastructure (like before)
+- **Mitigation**: Implement CDC fallback, test locally before pushing
+- **Status**: Ready (design decided)
 
 **Task 5: Dual Motor Wiring & Testing**
 - **Location**: CI runner hardware setup
@@ -197,18 +218,12 @@ gh workflow run hardware-test.yml
   - ✅ Reset command available (factory defaults)
 - **Status**: Design needed
 
-**Task 8: Native USB MIDI Addition (Optional)**
-- **Purpose**: Support direct MIDI tool connection (not just serial)
-- **Scope**: Enable `CFG_TUD_MIDI` in tusb_config, poll `usb_midi.read()`
-- **Trade-off**: Adds USB descriptor complexity, may break test harness again
-- **Owner**: Agent (if pursued)
-- **Effort**: 3-4 hours (implementation + test updates)
-- **Blocker**: Design decision (CDC vs Native vs Hybrid)
-- **Success Criteria**:
-  - ✅ MIDI tools recognize native MIDI device
-  - ✅ No test infrastructure regression
-  - ✅ CDC MIDI still works (backward compat)
-- **Status**: PostPoned pending design review
+**Task 8: Native USB MIDI Addition (Now Integrated with Task 4)** ✅ DECIDED
+- **Moved**: From "Medium Term" to "Task 4: MIDI Integration"
+- **User Decision**: "Only native USB MIDI" implemented with CDC fallback
+- **Purpose**: Direct MIDI tool connection + test harness compatibility
+- **Implementation**: Dual-input (native TinyUSB MIDI + CDC serial fallback)
+- **Status**: Integrated into Task 4 (4 hours total effort)
 
 **Task 9: MSFS Companion Script (Python)**
 - **Purpose**: Read MSFS sim data → send MIDI commands (e.g., throttle → pitch)
@@ -419,10 +434,11 @@ Print this section for manual review before each phase:
 - [ ] Are you comfortable with any code style changes?
 - [ ] Should we create a backup tag? (`git tag pre-hid-merge dev`)
 
-### Before Task 2 (Hardware Test):
-- [ ] Is the CI runner hardware ready (motor connected)?
-- [ ] Do you want to observe the first upload live?
-- [ ] Should we record metrics for later analysis?
+### Before Task 2 (Hardware Test): ✅ READY
+- [x] CI runner hardware ready (motor connected)
+- [x] Proceed with testing
+- ⚠️ **Note**: Runner may be unreliable initially - reliability expected to improve after first few commits
+- 📊 **Strategy**: Expect some flakiness, focus on understanding failures (iterate, don't give up)
 
 ### Before Task 4 (MIDI Dispatcher):
 - [ ] Which MIDI CC mapping? (throttle→7, flaps→5, etc.?)
@@ -465,6 +481,13 @@ main (stable)
 
 ---
 
-**Document Version**: v1.0  
-**Last Updated**: 2026-02-27 12:45 UTC  
-**Status**: 📋 Awaiting human approval to proceed with merge
+**Document Version**: v2.0  
+**Last Updated**: 2026-02-27 15:30 UTC  
+**Status**: ✅ Approved by human - proceeding with execution
+
+### User Decisions Recorded (2026-02-27)
+- ❌ Abandon `feature/modularize-main` → Merge conflicts not worth it, knowledge already on dev
+- ✅ Native USB MIDI: Moved to Task 4 (immediate), dual-input with CDC fallback
+- ✅ MIDI CC Mapping: Decided (flight sim standard CCs: throttle→7, flaps→5, spoilers→65, trim→10, gear→11)
+- ✅ Hardware testing: Ready to start (motor connected, runner reliability: may be flaky initially but should improve)
+- 📌 Runner reliability strategy: Iterate and understand failures, don't give up after first flaky run
