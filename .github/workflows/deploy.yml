@@ -20,7 +20,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, hardware]
+    runs-on: [self-hosted, pico_1motor_endless]
     timeout-minutes: 10
     
     steps:
@@ -149,4 +149,4 @@ jobs:
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Firmware deployed to hardware runner with tag: \`hardware\`" >> $GITHUB_STEP_SUMMARY
+          echo "Firmware deployed to hardware runner with tag: \`pico_1motor_endless\`" >> $GITHUB_STEP_SUMMARY

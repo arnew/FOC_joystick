@@ -83,9 +83,9 @@ This directory contains CI/CD workflows for the FOC Joystick project.
 **Purpose**: Quick firmware deployment to connected hardware (single motor, endless config)
 
 **Requirements**:
-- Self-hosted runner with tag: `hardware`
+- Self-hosted runner with tag: `pico_1motor_endless`
 - RP2040 Pico connected via USB
-- Motor + AS5600 encoder (for `pico_1motor_endless`)
+- Motor + AS5600 encoder (endless/360° configuration)
 
 **What it does**:
 1. Builds firmware for selected environment
@@ -196,15 +196,15 @@ gh run watch  # Watch latest run
 
 ## Self-Hosted Runner Setup
 
-For hardware testing and deployment, you need a self-hosted runner with the `hardware` tag:
+For hardware testing and deployment, you need a self-hosted runner with the `pico_1motor_endless` tag:
 
 ### Requirements
 - Linux machine (Ubuntu/Debian recommended)
 - RP2040 Pico connected via USB
-- Motor + AS5600 encoder wired (for full tests)
+- Motor + AS5600 encoder wired (endless/360° configuration)
 - Python 3.8+
 - USB permissions configured
-- Runner tagged with: `hardware`
+- Runner tagged with: `pico_1motor_endless`
 
 ### Installation
 ```bash
@@ -222,23 +222,27 @@ pip3 install --user platformio
 
 # 4. Download and configure GitHub Actions runner
 # (Follow instructions from repo Settings → Actions → Runners → Add runner)
-# IMPORTANT: When adding labels, include: self-hosted,Linux,X64,hardware
+# IMPORTANT: When adding labels, include: self-hosted,Linux,X64,pico_1motor_endless
 
 # 5. Start runner
 ./run.sh
 ```
 
-### Adding the "hardware" tag
-The runner must have the `hardware` label to be selected by deploy.yml and hardware-test.yml.
+### Adding the "pico_1motor_endless" tag
+The runner must have the `pico_1motor_endless` label to be selected by deploy.yml and hardware-test.yml.
+This label identifies the specific hardware configuration (single motor, endless/360° rotation).
 
 Add it during initial setup or update existing runner:
 ```bash
 # During setup:
-./config.sh --url https://github.com/USER/REPO --token TOKEN --labels self-hosted,Linux,X64,hardware
+./config.sh --url https://github.com/USER/REPO --token TOKEN --labels self-hosted,Linux,X64,pico_1motor_endless
 
 # Or via GitHub UI:
-# Settings → Actions → Runners → [Your Runner] → Edit labels → Add "hardware"
+# Settings → Actions → Runners → [Your Runner] → Edit labels → Add "pico_1motor_endless"
 ```
+
+**Future configurations**: When you add runners with different hardware (e.g., `pico_2motor_limited`),
+use matching labels so workflows can target the correct hardware.
 
 ### Testing runner
 ```bash
@@ -266,9 +270,9 @@ release.yml
 ├── create-release (tag & changelog)
 └── build-release-firmware (all environments)
 
-deploy.yml (standalone, self-hosted with "hardware" tag)
+deploy.yml (standalone, self-hosted with "pico_1motor_endless" tag)
 
-hardware-test.yml (standalone, self-hosted with "hardware" tag)
+hardware-test.yml (standalone, self-hosted with "pico_1motor_endless" tag)
 ```
 
 ---

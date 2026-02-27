@@ -23,7 +23,7 @@ on:
 
 jobs:
   hardware-test:
-    runs-on: [self-hosted, hardware]
+    runs-on: [self-hosted, pico_1motor_endless]
     timeout-minutes: 15
     
     steps:
