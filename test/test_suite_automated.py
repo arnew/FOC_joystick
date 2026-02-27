@@ -325,12 +325,13 @@ class HIDControllerTestSuite:
         
         if midi_sent or self.midi_ser:
             # With MIDI, we can trigger response
-            time.sleep(0.2)
-            # Read for up to 2s, re-sending once if needed
+            # Wait for next debug output (1 Hz = 1 second interval)
+            time.sleep(1.2)
+            # Read for up to 3s, re-sending once if needed
             start = time.time()
             resent = False
-            while time.time() - start < 2.0:
-                new_lines = self.read_debug_lines(timeout=0.25, max_lines=10)
+            while time.time() - start < 3.0:
+                new_lines = self.read_debug_lines(timeout=1.5, max_lines=10)
                 if new_lines:
                     lines.extend(new_lines)
                 if any(("Angle:" in l and "rad" in l) for l in lines):
@@ -343,11 +344,11 @@ class HIDControllerTestSuite:
                         except:
                             pass
                     resent = True
-                time.sleep(0.05)
+                time.sleep(0.1)
         else:
-            # No MIDI, wait for natural ~1Hz debug output
-            time.sleep(0.5)  # Wait for next message after connection
-            lines = self.read_debug_lines(timeout=2.0, max_lines=20)
+            # No MIDI, wait for natural 1Hz debug output
+            time.sleep(1.2)  # Wait for next message after connection
+            lines = self.read_debug_lines(timeout=2.5, max_lines=20)
         
         # Check for valid debug output format
         valid_response = False
@@ -413,17 +414,18 @@ class HIDControllerTestSuite:
             self.results.append(("Motor Response to MIDI", None, "MIDI port unavailable"))
             return None
         
-        # Capture baseline angle first
-        baseline_lines = self.read_debug_lines(timeout=0.8, max_lines=20)
+        # Capture baseline angle first (wait for debug output at 1 Hz)
+        baseline_lines = self.read_debug_lines(timeout=1.5, max_lines=20)
         baseline_angle = self._extract_last_angle(baseline_lines)
 
         # Send MIDI CC (use a non-center value to force noticeable motion)
         print("Sending MIDI CC#64 value 127...")
         self.send_midi_cc(64, 127)
-        time.sleep(0.5)
+        # Wait for next debug output cycle (1 Hz = 1 second + margin)
+        time.sleep(1.5)
         
         # Read response
-        lines = self.read_debug_lines(timeout=1.5)
+        lines = self.read_debug_lines(timeout=2.0)
         
         print("Response:")
         for line in lines[-5:]:  # Last 5 lines
@@ -508,10 +510,11 @@ class HIDControllerTestSuite:
         
         for cc_val in test_values:
             self.send_midi_cc(64, cc_val)
-            time.sleep(0.8)  # Longer settle time for motor movement
+            # Wait for debug output (1 Hz rate) plus motor settle time
+            time.sleep(1.5)
             
             # Read the angle (support both old and new format)
-            lines = self.read_debug_lines(timeout=0.5)
+            lines = self.read_debug_lines(timeout=2.0)
             angle_found = False
             for line in lines:
                 match = re.search(r'Angle:\s+([\-\d.]+)\s+rad', line)

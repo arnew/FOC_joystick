@@ -41,12 +41,12 @@ class HighSpeedMonitor:
         self.last_angle = None
         self.last_time = None
     
-    def sample_once(self, timeout: float = 0.01) -> Optional[MotorSample]:
+    def sample_once(self, timeout: float = 1.5) -> Optional[MotorSample]:
         """
         Try to read one angle sample from device
         
         Args:
-            timeout: Max time to wait for a line
+            timeout: Max time to wait for a line (default 1.5s for 1 Hz debug output)
         
         Returns:
             MotorSample if found, None if timeout or parse error

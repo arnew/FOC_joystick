@@ -146,10 +146,10 @@ class PIDCalibrator:
         
         return lines
     
-    def read_debug_lines_buffered(self, timeout=0.2):
+    def read_debug_lines_buffered(self, timeout=1.5):
         """
-        Read all available lines from debug port (buffered for ~1 Hz serial output)
-        Accumulates multiple samples in one read window since device outputs at ~1 Hz
+        Read all available lines from debug port (buffered for 1 Hz serial output)
+        Accumulates line waiting for next 1 Hz debug message from device
         """
         lines = []
         start = time.time()
