@@ -35,15 +35,27 @@ def find_native_midi_output():
         pygame.midi.init()
         for i in range(pygame.midi.get_count()):
             info = pygame.midi.get_device_info(i)
-            # Look for "Pico MIDI" output port (mode 0 = output)
-            if b"Pico" in info[1] and info[4] == 0:  # mode 0 = output
-                output = pygame.midi.Output(i)
-                print(f"OK: Native USB MIDI output: {info[1].decode()}")
-                return output
+            device_name = info[1].decode('utf-8', errors='ignore')
+            is_output = info[3] == 1  # info[3] = 1 means output (device can receive)
+            
+            # Exclude ALSA virtual ports ("Midi Through")
+            device_lower = device_name.lower()
+            if is_output and 'through' not in device_lower:
+                # Look for specific RP2040/Pico keywords
+                if any(keyword in device_lower for keyword in ['pico', 'rp2040', 'tinyusb']):
+                    output = pygame.midi.Output(i)
+                    print(f"OK: Native USB MIDI output: {device_name}")
+                    return output
+                # Fallback: accept generic "USB MIDI" but not virtual ports
+                elif 'usb' in device_lower and 'midi' in device_lower:
+                    output = pygame.midi.Output(i)
+                    print(f"OK: Native USB MIDI output: {device_name}")
+                    return output
     except Exception as e:
         print(f"ERROR: pygame.midi initialization failed: {e}")
     
     print("ERROR: No native USB MIDI (Pico MIDI) output found")
+    print("  Hint: Check that RP2040 is connected and firmware flashed")
     return None
 
 

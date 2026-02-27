@@ -192,11 +192,21 @@ class HIDControllerTestSuite:
                         
                         # Look for RP2040 MIDI output port (to send to device)
                         # Check for common RP2040/Pico MIDI names
-                        if is_output and any(keyword in device_name.lower() for keyword in ['pico', 'rp2040', 'tinyusb', 'midi']):
-                            self.midi_output = pygame.midi.Output(i)
-                            print(f"✓ Native USB MIDI: {device_name} (pygame.midi)")
-                            midi_found = True
-                            break
+                        # Exclude ALSA virtual ports ("Midi Through")
+                        device_lower = device_name.lower()
+                        if is_output and 'through' not in device_lower:
+                            # Prefer specific keywords first, fallback to generic 'usb'
+                            if any(keyword in device_lower for keyword in ['pico', 'rp2040', 'tinyusb']):
+                                self.midi_output = pygame.midi.Output(i)
+                                print(f"✓ Native USB MIDI: {device_name} (pygame.midi)")
+                                midi_found = True
+                                break
+                            elif 'usb' in device_lower and 'midi' in device_lower:
+                                # Accept generic "USB MIDI" but not "Midi Through"
+                                self.midi_output = pygame.midi.Output(i)
+                                print(f"✓ Native USB MIDI: {device_name} (pygame.midi)")
+                                midi_found = True
+                                break
                 except Exception as e:
                     print(f"⚠ Native USB MIDI scan failed: {e}")
             
