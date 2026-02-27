@@ -19,15 +19,14 @@ jobs:
           python3 --version
           which python3
       
-      - name: Check dependencies
+      - name: Install dependencies
         run: |
-          # Add user pip bin to PATH
           export PATH="$HOME/.local/bin:$PATH"
-          
           python3 --version
-          which platformio || echo "⚠ platformio not in PATH"
-          python3 -c "import serial" 2>/dev/null && echo "✓ pyserial installed" || echo "✗ pyserial missing"
-          python3 -c "import pygame" 2>/dev/null && echo "✓ pygame installed" || echo "✗ pygame missing"
+          which platformio || python3 -m pip install --user platformio
+          python3 -c "import serial" || python3 -m pip install --user pyserial
+          export PATH="$HOME/.local/bin:$PATH"
+          which platformio && echo "✓ platformio" || { echo "✗ platformio missing"; exit 1; }
       
       - name: Build firmware
         run: |
