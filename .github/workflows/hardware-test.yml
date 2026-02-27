@@ -42,7 +42,7 @@ jobs:
       
       - name: Run hardware tests
         run: |
-          ./test/run_ci_tests.sh
+          bash ./test/run_ci_tests.sh
         env:
           SERIAL_PORT: /dev/ttyACM0
       
