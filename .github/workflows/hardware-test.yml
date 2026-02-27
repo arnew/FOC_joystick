@@ -59,13 +59,14 @@ jobs:
 
       - name: Install PlatformIO
         run: |
-          python3 -m pip install --break-system-packages platformio
-          python3 -m platformio --version
+          python3 -m pip install --upgrade pip
+          pip install --break-system-packages platformio
+          platformio --version
 
       - name: Build firmware
         run: |
           echo "Building firmware for ${{ steps.set-env.outputs.environment }}..."
-          python3 -m platformio run -e ${{ steps.set-env.outputs.environment }}
+          platformio run -e ${{ steps.set-env.outputs.environment }}
           
           # Check build artifacts
           ELF_FILE=".pio/build/${{ steps.set-env.outputs.environment }}/firmware.elf"
@@ -92,7 +93,7 @@ jobs:
           fi
           
           # Upload with timeout
-          timeout 60 python3 -m platformio run --target upload -e ${{ steps.set-env.outputs.environment }} || {
+          timeout 60 platformio run --target upload -e ${{ steps.set-env.outputs.environment }} || {
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
               echo "::error::Upload timeout - device may need manual BOOTSEL"
