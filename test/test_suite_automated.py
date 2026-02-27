@@ -589,6 +589,67 @@ class HIDControllerTestSuite:
         self.results.append(("Motor Sweep", True, None))
         return True
 
+    def test_midi_to_hid_passthrough(self):
+        """Test 5a: MIDI CC values map directly to HID joystick (dummy mode test)
+        
+        Validates that MIDI CC commands produce expected HID joystick output.
+        Mapping: CC 0-127 → angle 0-2π → joystick 0-1023
+        """
+        print("\n" + "=" * 70)
+        print("TEST 5A: MIDI to HID Passthrough Mapping")
+        print("=" * 70)
+        
+        if not self.midi_output and not self.midi_ser:
+            print("⊘ SKIP: MIDI port not available")
+            self.results.append(("MIDI→HID Passthrough", None, "MIDI port unavailable"))
+            return None
+        
+        # Test cases: (CC value, expected joystick range)
+        # Mapping: CC normalized (0-1) → angle normalized (0-1) → joystick (0-1023)
+        test_cases = [
+            (0, 0, 50),        # CC=0 → JS≈0 (±50)
+            (64, 512, 50),     # CC=64 → JS≈512 (±50)
+            (127, 1023, 50),   # CC=127 → JS≈1023 (±50)
+        ]
+        
+        passed_cases = 0
+        for cc_val, expected_js, tolerance in test_cases:
+            print(f"\n  Testing CC#{64}={cc_val}...")
+            self.send_midi_cc(64, cc_val)
+            time.sleep(1.5)  # Wait for 1 Hz debug cycle
+            
+            lines = self.read_debug_lines(timeout=2.0, max_lines=20)
+            
+            # Look for joystick value in debug output ("JS=X,Y" format)
+            js_values = []
+            for line in lines:
+                match = re.search(r'JS=(\d+),(\d+)', line)
+                if match:
+                    js_x = int(match.group(1))
+                    js_y = int(match.group(2))
+                    js_values.append(js_x)  # Check X axis
+                    print(f"    Readback: JS={js_x},{js_y}")
+            
+            if js_values:
+                last_js = js_values[-1]  # Use most recent value
+                error = abs(last_js - expected_js)
+                if error <= tolerance:
+                    print(f"    ✓ Match: expected {expected_js}±{tolerance}, got {last_js}")
+                    passed_cases += 1
+                else:
+                    print(f"    ✗ Mismatch: expected {expected_js}±{tolerance}, got {last_js}")
+            else:
+                print(f"    ⊘ No JS values in debug output")
+        
+        if passed_cases >= 2:  # At least 2 of 3 test cases pass
+            print(f"\n✓ PASS: {passed_cases}/{len(test_cases)} mapping test cases")
+            self.results.append(("MIDI→HID Passthrough", True, f"{passed_cases}/{len(test_cases)}"))
+            return True
+        else:
+            print(f"\n✗ FAIL: Only {passed_cases}/{len(test_cases)} mapping test cases passed")
+            self.results.append(("MIDI→HID Passthrough", False, f"{passed_cases}/{len(test_cases)}"))
+            return False
+
     def test_motor_dynamics_highspeed(self):
         """Test 5b (Removed): High-speed motor dynamics capture
 
@@ -688,6 +749,7 @@ class HIDControllerTestSuite:
             'midi': self.test_motor_response_to_midi,
             'scaling': self.test_joystick_scaling,
             'sweep': self.test_motor_sweep,
+            'passthrough': self.test_midi_to_hid_passthrough,
             'dynamics': self.test_motor_dynamics_highspeed,
         }
         
@@ -710,6 +772,7 @@ class HIDControllerTestSuite:
                 ('midi', self.test_motor_response_to_midi),
                 ('scaling', self.test_joystick_scaling),
                 ('sweep', self.test_motor_sweep),
+                ('passthrough', self.test_midi_to_hid_passthrough),
             ]
             # Add dynamics only if monitor enabled
             if self.enable_monitor:

@@ -73,8 +73,17 @@ static void service_debug_output(unsigned long now_ms) {
 
   // Never block control loop on CDC when host is not draining serial.
   if (Serial && Serial.availableForWrite() >= DEBUG_MIN_WRITE_BYTES) {
+    // In dummy mode, also print HID joystick values for test verification
+    #ifdef DUMMY_MODE
+    char line[64];
+    uint16_t js_x = angle_to_joystick_value(0);
+    uint16_t js_y = angle_to_joystick_value(1);
+    snprintf(line, sizeof(line), "A=%.2f T=%.2f JS=%d,%d", 
+             get_motor_angle(0), target_angle[0], js_x, js_y);
+    #else
     char line[48];
     snprintf(line, sizeof(line), "A=%.2f T=%.2f", get_motor_angle(0), target_angle[0]);
+    #endif
     Serial.println(line);
   }
 
