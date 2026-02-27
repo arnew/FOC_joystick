@@ -104,10 +104,6 @@ jobs:
       - name: Run selected hardware tests
         run: |
           echo "Running tests: ${{ inputs.tests }}"
-          python3 -m venv $HOME/ci-venv || true
-          source $HOME/ci-venv/bin/activate
-          pip install --upgrade pip
-          pip install pyserial pygame
           cd test
           python3 test_suite_automated.py --tests ${{ inputs.tests }} --json-out ci_hardware_test.json
       

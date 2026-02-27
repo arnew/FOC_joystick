@@ -158,16 +158,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        run: |
-          python3 -m venv $HOME/ci-venv || true
-          source $HOME/ci-venv/bin/activate
-          pip install --upgrade pip
-          pip install pyserial pygame
-      
       - name: Run connectivity test
         run: |
-          source $HOME/ci-venv/bin/activate
           cd test
           python3 test_suite_automated.py --tests connectivity --json-out ci_hardware_test.json
       
@@ -190,16 +182,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        run: |
-          python3 -m venv $HOME/ci-venv || true
-          source $HOME/ci-venv/bin/activate
-          pip install --upgrade pip
-          pip install pyserial pygame
-      
       - name: Run position test
         run: |
-          source $HOME/ci-venv/bin/activate
           cd test
           python3 test_suite_automated.py --tests position --json-out ci_hardware_test.json
       
@@ -222,16 +206,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        run: |
-          python3 -m venv $HOME/ci-venv || true
-          source $HOME/ci-venv/bin/activate
-          pip install --upgrade pip
-          pip install pyserial pygame
-      
       - name: Run MIDI test
         run: |
-          source $HOME/ci-venv/bin/activate
           cd test
           python3 test_suite_automated.py --tests midi --json-out ci_hardware_test.json
       
@@ -254,16 +230,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        run: |
-          python3 -m venv $HOME/ci-venv || true
-          source $HOME/ci-venv/bin/activate
-          pip install --upgrade pip
-          pip install pyserial pygame
-      
       - name: Run sweep test
         run: |
-          source $HOME/ci-venv/bin/activate
           cd test
           python3 test_suite_automated.py --tests sweep --json-out ci_hardware_test.json
       
@@ -286,16 +254,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        run: |
-          python3 -m venv $HOME/ci-venv || true
-          source $HOME/ci-venv/bin/activate
-          pip install --upgrade pip
-          pip install pyserial pygame
-      
       - name: Run scaling test
         run: |
-          source $HOME/ci-venv/bin/activate
           cd test
           python3 test_suite_automated.py --tests scaling --json-out ci_hardware_test.json
       
