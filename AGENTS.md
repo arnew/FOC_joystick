@@ -8,10 +8,12 @@ UNIX - KISS
 Only mandatory inventions. When stuff is already available, use the lib, tool, whatever.
 Functions stay small, ideally fit on one monitor page (80x25 to 132x43).
 Knowledge base files need to be readable by a human in about 5 minutes.
+All code patches/commits should follow the Linux Kernel Mailing List guidance for patches.
 
 **Development Model**: 
 Git-flow. We use the "git flow" tool. All changes must be developed in feature/ or hotfix/ branches, development is done in dev, releases are kept in main, releases are prepared in release/. Experiments not meant to be merged go into experiment/ branches.
 Explicit knowledge transfer. If specific knowledge needs to be transferred, it should be separated out into a knowledge update commit, which can then be cherry-picked/merged from somewhere else. Ideally we split into hypothesis commits at the beginning of an experiment which get merged and confirmation commits which get cherry-picked.
+Leave it better than you found it. At the end of each increment, immediately before or after merging, the code gets improved (refactoring, commenting, ...) at least up to the state it should have been in, ideally a bit better.
 Test-driven. All changes must pass automated tests. Testing is wanted during development, before merging a branch or creating a release tests must be successful.
 Agent-positive. 
  - The agent creates commits and merges code using its own name, leaving the default setup such that users can commit without changing settings.
