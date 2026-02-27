@@ -69,11 +69,30 @@ jobs:
     runs-on: [self-hosted, hardware]
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Install PlatformIO
+        run: |
+          pip install --upgrade pip
+          pip install platformio
+          
       - name: Download firmware artifact
         uses: actions/download-artifact@v4
         with:
           name: firmware-hw-test-${{ github.run_number }}
           path: ./
+      
+      - name: Prepare firmware for upload
+        run: |
+          mkdir -p .pio/build/pico_1motor_endless/
+          cp firmware.uf2 .pio/build/pico_1motor_endless/firmware.uf2
+          ls -lh .pio/build/pico_1motor_endless/firmware.uf2
 
       - name: Unmount RP2040 BOOTSEL volume (if mounted)
         run: |
@@ -108,15 +127,13 @@ jobs:
           fi
           udevadm settle || true
       
-      - name: Upload firmware to device with picotool
+      - name: Upload firmware to device
         run: |
-          ls -lh firmware.uf2
-          PICOTOOL="$HOME/.platformio/packages/tool-picotool-rp2040-earlephilhower/picotool"
-          $PICOTOOL load -f -v -x firmware.uf2 || {
+          platformio run -e pico_1motor_endless --target upload || {
             echo "Upload failed once; retrying after short settle..."
             sleep 2
             udevadm settle || true
-            $PICOTOOL load -f -v -x firmware.uf2
+            platformio run -e pico_1motor_endless --target upload
           }
       
       - name: Wait for device reset
