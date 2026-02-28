@@ -68,6 +68,13 @@ void set_motor_target(uint8_t motor_id,
 float get_motor_angle(uint8_t motor_id);
 
 /**
+ * Get current motor target angle
+ * @param motor_id Motor index (0 or 1)
+ * @return Target angle in radians
+ */
+float get_motor_target(uint8_t motor_id);
+
+/**
  * Apply motor limits (clamp or wrap)
  * @param motor_id Motor index (0 or 1)
  * @param angle Angle to limit (modified in place)

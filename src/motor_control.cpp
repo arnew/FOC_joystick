@@ -34,52 +34,7 @@ float current_angle[1] = {0.0f};
 uint8_t active_motor = 0;
 
 // ============================================================================
-// DUMMY MODE: Passthrough MIDI → HID (no motor control)
-// ============================================================================
-// When DUMMY_MODE is enabled:
-// - MIDI CC values directly map to joystick position
-// - No SimpleFOC motor control
-// - Useful for testing HID integration without hardware
-
-#ifdef DUMMY_MODE
-void init_motor(uint8_t motor_id) {
-  // No-op in dummy mode
-  (void)motor_id;
-  Serial.println("[DUMMY MODE] Motor init skipped");
-}
-
-void update_motor(uint8_t motor_id) {
-  // No-op in dummy mode
-  (void)motor_id;
-}
-
-void set_motor_target(uint8_t motor_id, float angle) {
-  if (motor_id >= 1) return;
-  target_angle[motor_id] = angle;
-  current_angle[motor_id] = angle;  // Echo directly (no FOC)
-}
-
-float get_motor_angle(uint8_t motor_id) {
-  if (motor_id >= 1) return 0.0f;
-  return current_angle[motor_id];
-}
-
-void handle_motor_limits(uint8_t motor_id, float& angle) {
-  if (motor_id >= 1) return;
-  const MotorProfile* profile = get_motor_profile(motor_id);
-  if (!profile) return;
-  
-  if (profile->is_endless) {
-    while (angle < 0.0f) angle += 6.28318f;
-    while (angle > 6.28318f) angle -= 6.28318f;
-  } else {
-    angle = constrain(angle, profile->min_angle, profile->max_angle);
-  }
-}
-
-#else
-// ============================================================================
-// MOTOR INITIALIZATION (FOC MODE)
+// MOTOR INITIALIZATION
 // ============================================================================
 
 static void setup_motor_driver(uint8_t motor_id, BLDCDriver3PWM* driver) {
@@ -216,6 +171,11 @@ float get_motor_angle(uint8_t motor_id) {
   return current_angle[motor_id];
 }
 
+float get_motor_target(uint8_t motor_id) {
+  if (motor_id >= 2) return 0.0f;
+  return target_angle[motor_id];
+}
+
 void handle_motor_limits(uint8_t motor_id, 
                          float& angle) {
   if (motor_id >= 2) return;
@@ -239,4 +199,3 @@ void handle_motor_limits(uint8_t motor_id,
                       profile->max_angle);
   }
 }
-#endif  // DUMMY_MODE
