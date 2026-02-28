@@ -93,11 +93,13 @@ def test_motor_movement():
         
         # Step 2: Set target to 3.14 radians (180°)
         log("Step 2: Command motor to 3.14 rad (180°)")
-        log("  Sending: M0T3.14")
-        send_command(ser, "M0T3.14")
+        log("  Sending: M0 T3.14")
+        response = send_command(ser, "M0 T3.14")
+        for line in response:
+            log(f"  Response: {line}")
         
         # Wait a moment for motor to start moving
-        time.sleep(0.5)
+        time.sleep(1.0)
         
         # Step 3: Check angle after command
         log("Step 3: Verify motor is moving toward target")
