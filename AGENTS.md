@@ -15,6 +15,7 @@ Only mandatory inventions. When stuff is already available, use the lib, tool, w
 Functions stay small, ideally fit on one monitor page (80x25 to 132x43).
 Knowledge base files need to be readable by a human in about 5 minutes.
 All code patches/commits should follow the Linux Kernel Mailing List guidance for patches.
+DO NOT LITTER: Put files in (sub-)folders. Start new files only after having a holistic look at the setup.
 
 **Development Model**: 
 Git-flow. We use the "git flow" tool. All changes must be developed in feature/ or hotfix/ branches, development is done in dev, releases are kept in main, releases are prepared in release/. Experiments not meant to be merged go into experiment/ branches.
