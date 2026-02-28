@@ -37,11 +37,14 @@ Buildable configurations support different hardware setups:
 Build with: `platformio run -e pico_1motor_endless`
 
 **Quality Goals**
-Position Hold:
-    Target: Target must be met within 1 degree.
-    Noise: At position the motor should not vibrate visibly (less than 1 degree variance).
-Movement: 
-    Travelling to a position the motor should not overshoot violently (less than 5 degree overshoot.).
+Resolution: 1 degree or better.
+Speed: 60 rpm or better.
+Precision:
+    Position Hold:
+        Target: Target must be met within 1 degree.
+        Noise: At position the motor should not vibrate visibly (less than 1 degree variance).
+    Movement: 
+        Travelling to a position the motor should not overshoot violently (less than 5 degree overshoot.).
 The controller internally samples positions synchronized to the control loop:
     - rolling average of the position and variance measurements of the last 500ms.
     - resettable min/max position.
