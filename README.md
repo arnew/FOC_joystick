@@ -19,7 +19,7 @@ This is a usb HID joystick that accepts MIDI commands to control SimpleFOC drive
     - Spoiler (like above), 
     - Trim (like above)
 
-See [AIRCRAFT_PROFILES.md](AIRCRAFT_PROFILES.md) for detailed MIDI CC mappings and profile switching instructions.
+Each control/aircraft is individually selectable, also reflected in the usb descriptor, so that a set of controls for a given flight can be composed just by plugging in the correct preconfigured devices.
 
 The joystick sends position data as USB HID output to Microsoft Flight Simulator. With the single-motor hardware, one axis is controlled at a time (typically trim or one aircraft control). Select profiles by editing [src/config.h](src/config.h) before building.
 
