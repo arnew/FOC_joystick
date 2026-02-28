@@ -465,10 +465,11 @@ class HIDControllerTestSuite:
         
         joystick_values = []
         for line in lines:
-            # Look for "USB: 512 (0-1023)"
-            match = re.search(r'USB:\s+(\d+)\s+\(', line)
+            # Look for "JS=X,Y" format
+            match = re.search(r'JS=(\d+),(\d+)', line)
             if match:
-                joystick_values.append(int(match.group(1)))
+                joystick_values.append(int(match.group(1)))  # X axis
+                joystick_values.append(int(match.group(2)))  # Y axis
         
         if joystick_values:
             print(f"Joystick values read: {joystick_values}")
