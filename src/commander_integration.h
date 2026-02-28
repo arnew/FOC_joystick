@@ -1,10 +1,17 @@
 /**
- * commander_integration.h - SimpleFOC Commander
+ * commander_integration.h - SimpleFOC Commander Interface
  * 
- * SimpleFOC Commander integration for GUI tuning:
- * - Text-based command protocol (MAP20.0, etc)
- * - SimpleFOC Studio compatible
- * - Real-time PID parameter adjustment
+ * Standard SimpleFOC Commander for:
+ * - Real-time PID tuning
+ * - Motor parameter adjustment  
+ * - Hardware test verification (CI)
+ * - SimpleFOC Studio integration
+ * 
+ * Commands:
+ *   M0         - Access motor 0 (shows available commands)
+ *   M0T3.14    - Set target to 3.14 radians
+ *   M0C        - Run motion test
+ *   M0?        - Get motor status
  */
 
 #ifndef COMMANDER_INTEGRATION_H

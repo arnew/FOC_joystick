@@ -23,6 +23,7 @@
 #include "motor_control.h"
 #include "midi_handler.h"
 #include "usb_hid.h"
+#include "commander_integration.h"
 
 // ============================================================================
 // I/O RATE SCHEDULING (USB CDC + MIDI + HID)
@@ -73,17 +74,8 @@ static void service_debug_output(unsigned long now_ms) {
 
   // Never block control loop on CDC when host is not draining serial.
   if (Serial && Serial.availableForWrite() >= DEBUG_MIN_WRITE_BYTES) {
-    // In dummy mode, also print HID joystick values for test verification
-    #ifdef DUMMY_MODE
-    char line[64];
-    uint16_t js_x = angle_to_joystick_value(0);
-    uint16_t js_y = angle_to_joystick_value(1);
-    snprintf(line, sizeof(line), "A=%.2f T=%.2f JS=%d,%d", 
-             get_motor_angle(0), target_angle[0], js_x, js_y);
-    #else
     char line[48];
     snprintf(line, sizeof(line), "A=%.2f T=%.2f", get_motor_angle(0), target_angle[0]);
-    #endif
     Serial.println(line);
   }
 
@@ -121,6 +113,9 @@ void setup() {
   // Initialize MIDI handler
   init_midi_handler();
   
+  // Initialize Commander (for CI testing and tuning)
+  init_commander();
+  
   // Print configuration
   Serial.println("\n=== Loaded Configuration ===");
   Serial.print("Axes: ");
@@ -151,8 +146,11 @@ void loop() {
 
   // 2. MIDI input (bounded burst handling)
   service_midi_input();
+  
+  // 3. Commander input (CI testing, tuning)
+  update_commander();
 
-  // 3. USB outputs (scheduled)
+  // 4. USB outputs (scheduled)
   unsigned long now_ms = millis();
   service_hid_output(now_ms);
   service_debug_output(now_ms);
