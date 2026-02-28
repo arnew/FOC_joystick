@@ -58,21 +58,7 @@ static void cmd_set_target(char* cmd) {
   Serial.println("°");
 }
 
-// Custom command: Reboot to BOOTSEL mode
-// Format: RB
-static void cmd_reboot_bootloader(char* cmd) {
-  Serial.println("[BOOTLOADER] Rebooting to BOOTSEL mode...");
-  Serial.flush();
-  delay(200);
-  
-  // RP2040 magic: write signature to RAM and reset to trigger bootloader
-  uint32_t *magic = (uint32_t *)0x20042000;
-  *magic = 0x73717856;  // "vxsq" - bootloader magic
-  
-  // Reset via ARM AIRCR register
-  __asm("dsb");
-  SCB->AIRCR = 0x05FA0004;  // AIRCR reset vector
-}
+
 
 // Custom command: Statistics display
 // Format: S (show stats), S0 (reset counters)
@@ -125,7 +111,6 @@ void init_commander() {
   commander.add('T', cmd_set_target, (const char*)"set target directly");
   commander.add('A', cmd_switch_profile, (const char*)"aircraft profile (0=A320, 1=Cessna, 2=Glider)");
   commander.add('S', cmd_statistics, (const char*)"statistics (S=show, S0=reset)");
-  commander.add('R', cmd_reboot_bootloader, (const char*)"reboot to BOOTSEL (RB)");
   
   Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
   Serial.println("[COMMANDER] Commands available:");
@@ -135,7 +120,6 @@ void init_commander() {
   Serial.println("  A<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");
   Serial.println("  S           - Show device statistics");
   Serial.println("  S0          - Reset statistics counters");
-  Serial.println("  RB          - Reboot to BOOTSEL (for firmware upload)");
 }
 
 void update_commander() {
