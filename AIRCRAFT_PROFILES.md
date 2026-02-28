@@ -13,7 +13,7 @@ The firmware supports three aircraft profiles that define which MIDI Control Cha
 Edit [src/config.h](src/config.h) and change the `ACTIVE_CONFIG` and `NUM_ACTIVE_AXES` macros:
 
 ```cpp
-// At the bottom of config.h, around line 199-200
+// At the bottom of config.h, around line 245-246
 #define ACTIVE_CONFIG A320_CONFIG          // Change this line
 #define NUM_ACTIVE_AXES NUM_A320_AXES      // Change this line to match
 ```
@@ -38,6 +38,29 @@ Then rebuild and upload:
 platformio run -e pico_1motor_endless
 # (Hold BOOTSEL, then it uploads)
 ```
+
+### Runtime Selection (NEW!)
+
+Switch aircraft profiles **without recompiling** via serial commands:
+
+```bash
+# Show available profiles
+> P
+
+# Switch to A320
+> P0
+
+# Switch to Cessna
+> P1
+
+# Switch to Glider
+> P2
+
+# Check current profile
+> P
+```
+
+Use any serial terminal (Arduino IDE, minicom, `picocom`, etc.) connected to `/dev/ttyACM0`.
 
 ## Aircraft Configurations
 
@@ -132,14 +155,7 @@ output.send(msg)
 
 See [test/debug_midi.py](test/debug_midi.py) for an interactive test tool.
 
-## Next Steps
-
-### Runtime Profile Switching (Future)
-
-For dynamic profile switching at runtime without recompiling:
-1. Add a MIDI "profile change" CC (e.g., CC#0 to select profile)
-2. Store the profile selection in the config struct
-3. Update `find_axis_by_cc()` to switch between profiles dynamically
+## Future Enhancements
 
 ### MSFS Integration (Future)
 
@@ -147,6 +163,10 @@ A companion script will be provided that:
 1. Reads flight simulator data (throttle, flaps, trim, etc.)
 2. Converts to appropriate MIDI CC commands
 3. Sends to the Pico via USB MIDI
+
+### Multi-Motor Configuration (Future)
+
+Support for dual-motor setups (one motor per axis) with simultaneous control of two aircraft controls.
 
 This enables true "follow-along" motion where the motor follows the simulator's control state.
 
