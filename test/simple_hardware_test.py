@@ -86,7 +86,7 @@ def test_3_device_responds():
 def test_4_device_initialization():
     """Test 4: Check for motor initialization logs"""
     log("TEST 4: Verify motor initialization")
-    log("  Looking for [MOTOR] initialization messages...")
+    log("  Looking for motor initialization messages...")
     
     try:
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.5)
@@ -102,7 +102,7 @@ def test_4_device_initialization():
                 try:
                     decoded = line.decode('utf-8', errors='ignore').strip()
                     if decoded:
-                        if '[MOTOR]' in decoded or 'MOTOR' in decoded:
+                        if 'MOTOR' in decoded.upper() or 'initialization complete' in decoded.lower():
                             log(f"  << {decoded}")
                             motor_init_found = True
                             if 'complete' in decoded.lower() or 'ready' in decoded.lower():
@@ -130,42 +130,46 @@ def test_4_device_initialization():
         return False
 
 
-def test_5_simple_query():
-    """Test 5: Send simple command and expect telemetry response"""
-    log("TEST 5: Query device state")
-    log("  Waiting for telemetry output (A=angle T=target)...")
+def test_5_commander_interface():
+    """Test 5: Verify SimpleFOC Commander responds"""
+    log("TEST 5: Test Commander interface")
+    log("  Sending M0? command to query motor status...")
     
     try:
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.5)
         
-        # Just listen for telemetry (our device emits periodic updates)
-        start = time.time()
-        telemetry_found = False
+        # Send status query command
+        ser.write(b"M0?\n")
+        ser.flush()
         
-        while time.time() - start < 5:
+        # Wait for response
+        start = time.time()
+        commander_response = False
+        
+        while time.time() - start < 3:
             line = ser.readline()
             if line:
                 try:
                     decoded = line.decode('utf-8', errors='ignore').strip()
-                    if 'A=' in decoded or 'T=' in decoded:
+                    if decoded and ('M0' in decoded or 'target' in decoded.lower() or 'angle' in decoded.lower()):
                         log(f"  << {decoded}")
-                        telemetry_found = True
+                        commander_response = True
                         break
                 except:
                     pass
         
         ser.close()
         
-        if not telemetry_found:
-            log("  ✗ FAIL: No telemetry data received")
-            log("  Device may not be running main loop")
+        if not commander_response:
+            log("  ✗ FAIL: No response to Commander command")
+            log("  SimpleFOC Commander may not be initialized")
             return False
         
-        log("  ✓ PASS: Device responding with telemetry")
+        log("  ✓ PASS: Commander interface responding")
         return True
         
     except Exception as e:
-        log(f"  ✗ FAIL: Error querying device: {e}")
+        log(f"  ✗ FAIL: Error testing Commander: {e}")
         return False
 
 
@@ -183,7 +187,7 @@ def main():
         ("Device Opens", test_2_device_opens),
         ("Device Responds", test_3_device_responds),
         ("Motor Initialization", test_4_device_initialization),
-        ("Device Telemetry", test_5_simple_query),
+        ("Commander Interface", test_5_commander_interface),
     ]
     
     results = []
