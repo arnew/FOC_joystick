@@ -30,7 +30,7 @@ There is a config/calibration app/script that selects the profile, allows config
 Profiles are selected during compile time, or set via midi command. Joystick is able to operate in profile with preconfigured notches without companion app.
 
 **Hardware Configurations**:
-Three buildable configurations support different hardware setups:
+Buildable configurations support different hardware setups:
 - **pico_1motor_endless** — Single endless motor (current hardware, trim-like)
 - **pico_1motor_limited** — Single 0-180° motor (throttle/flaps-like)
 
