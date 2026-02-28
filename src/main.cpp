@@ -30,7 +30,7 @@
 // ============================================================================
 
 static constexpr uint16_t HID_UPDATE_INTERVAL_MS = 20;      // 50 Hz
-static constexpr uint16_t DEBUG_UPDATE_INTERVAL_MS = 1000;  // 1 Hz
+static constexpr uint16_t DEBUG_UPDATE_INTERVAL_MS = 100;   // 10 Hz (fast for CI testing)
 static constexpr uint16_t MIDI_MAX_BYTES_PER_LOOP = 24;     // 8 CC messages max
 static constexpr uint32_t MIDI_BUDGET_US = 500;             // max MIDI time slice
 static constexpr size_t DEBUG_MIN_WRITE_BYTES = 32;
