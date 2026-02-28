@@ -18,3 +18,6 @@ Three buildable configurations support different hardware setups:
 
 Build with: `platformio run -e pico_1motor_endless`
 
+**Quality Goals**
+Position Hold Noise: At position the motor should not vibrate visibly.
+Movement: Travelling to a position the motor should not overshoot violently.
