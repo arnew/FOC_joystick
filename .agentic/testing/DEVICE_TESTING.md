@@ -10,7 +10,7 @@ At the beginning of any session, run this to understand testing capabilities:
 cd /home/arnew/Notebooks.st.rasentrimmer.org/FOC/rp2040_mini_as5600
 
 # Detect local device and save config
-bash .agentic/local_device_detect.sh --save
+bash .agentic/ci/local_device_detect.sh --save
 
 # Source the config for environment variables
 source .agentic/local_device.conf
@@ -29,12 +29,8 @@ echo "CAN_TEST_LOCAL=$CAN_TEST_LOCAL"
 
 **What you can do**:
 ```bash
-# Run motor movement test locally
-cd test/
-python3 test_motor_movement.py
-
-# Run simple hardware test
-python3 simple_hardware_test.py
+# Run quality goals test suite
+python3 test/quality_goals_test_suite.py
 ```
 
 **Typical commands**:
@@ -222,7 +218,7 @@ START
 
 1. **Session start**:
    ```bash
-   bash .agentic/local_device_detect.sh --save
+   bash .agentic/ci/local_device_detect.sh --save
    source .agentic/local_device.conf
    ```
 
@@ -230,7 +226,7 @@ START
    ```bash
    if [ "$CAN_TEST_LOCAL" = true ]; then
        # Run local tests
-       python3 test/test_motor_movement.py
+       python3 test/quality_goals_test_suite.py
    else
        # Use CI testing
        gh workflow run hardware-test.yml --ref dev
@@ -247,6 +243,6 @@ START
 ---
 
 **See also**: 
-- [.agentic/local_device_detect.sh](.agentic/local_device_detect.sh) - Detection script
-- [.agentic/ci_device_detect.sh](.agentic/ci_device_detect.sh) - CI validation script
-- [test/test_motor_movement.py](../test/test_motor_movement.py) - Motor test source
+- [ci/local_device_detect.sh](ci/local_device_detect.sh) - Detection script
+- [ci/ci_device_detect.sh](ci/ci_device_detect.sh) - CI validation script
+- [quality_goals_test_suite.py](../test/quality_goals_test_suite.py) - Active test suite

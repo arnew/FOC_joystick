@@ -311,3 +311,25 @@ git checkout <commit-hash> -- test/calibrate_pid.py
 - **SimpleFOC Commander**: 2026-02-27 (commit: consolidate to single motor)
 
 **Final State**: Single-motor endless-rotation trim controller with manual PID tuning. Quality score: 72.9/100 GOOD.
+
+---
+
+## 4. Automated Bootloader Entry (RB Command) ❌
+
+**Status**: FAILED EXPERIMENT - Abandoned  
+**Date**: 2026-02-28  
+**Outcome**: Manual BOOTSEL remains the only reliable upload method
+
+### What Was Attempted
+
+Reboot-to-bootloader via serial command to eliminate manual BOOTSEL presses:
+1. **ARM AIRCR register reset** — SCB not defined, compilation failed
+2. **Watchdog reset with magic RAM value** — Device locks up, no BOOTSEL mount, requires power cycle
+
+### Why It Failed
+
+RP2040 bootloader doesn't support runtime software-triggered bootloader entry after USB CDC is established. The Pico SDK's `watchdog_reboot()` requires specific initialization not available in the SimpleFOC Arduino context.
+
+### Lesson
+
+Don't invent bootloader solutions — manual BOOTSEL is a hardware constraint. DTR-based 1200bps touch works for some Arduino boards but is unreliable on RP2040 with TinyUSB stack. Accept it and optimize the press-upload workflow instead.

@@ -117,7 +117,8 @@ void init_motor(uint8_t motor_id) {
 
 // Motor idle/rest tracking - stop applying current when at rest
 static unsigned long last_movement_time[1] = {0};
-static const uint16_t MOTOR_IDLE_TIMEOUT_MS = 500;  // Cut power after 500ms at rest
+static const uint16_t MOTOR_IDLE_TIMEOUT_MS = 2000;  // Cut power after 2s truly at rest
+static const float IDLE_ERROR_THRESHOLD = 0.017f;     // ~1° — only idle when PID has settled
 
 bool home_motor(uint8_t motor_id) {
   if (motor_id >= 1 || !motors[motor_id]) return false;
@@ -182,7 +183,7 @@ void update_motor(uint8_t motor_id) {
   if (delta > PI) delta -= 2.0f * PI;
   else if (delta < -PI) delta += 2.0f * PI;
   
-  if (abs(delta) > 0.05f) {  // 0.05 rad = ~3° = motion needed
+  if (abs(delta) > IDLE_ERROR_THRESHOLD) {  // Only stay active if error > ~1°
     last_movement_time[motor_id] = now;
   }
   

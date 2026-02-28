@@ -8,6 +8,44 @@
 - Functions stay small (≤43 lines per AGENTS.md)
 - Keep it simple, working > perfect
 
+## Observability: Show Your Work
+
+**When testing or diagnosing, always show all raw observations first, then derive conclusions.**
+
+Every test report must contain:
+1. **Target** — what was commanded (angle, position, value)
+2. **Actual** — what was measured (sensor reading, device output)
+3. **Variance** — spread/noise of measurements (stddev, min/max)
+4. **Internal vs external** — device-reported vs host-measured values
+5. **Acceptance criteria** — the threshold being tested against
+6. **Conclusion** — PASS/FAIL derived from the above
+
+Never report just "FAIL" or "8% pass rate" without the underlying numbers.
+
+## Housekeeping
+
+**The repo must stay clean at all times. Cleanup is not optional post-work.**
+
+### Files
+- `git status` must be clean before and after each work session
+- Test artifacts (.json, .log) must never be committed — they belong in .gitignore
+- No orphan files in the workspace root
+
+### test/ directory structure
+- **One active test suite** at the top level (currently `quality_goals_test_suite.py`)
+- `test/tools/` — interactive debug/monitoring scripts (debug_joystick, hid_monitor, etc.)
+- `test/unit/` — pytest-compatible unit tests and their helpers
+- `test/archive/` — superseded tests kept for reference, not run
+- Each subdirectory gets a README.md
+
+### .agentic/ directory structure
+- **≤7 files at root** (Miller's number). Currently: README, PURPOSE, AGENT_GUIDELINES, KNOWLEDGE_BASE, FAILED_EXPERIMENTS, FEATURE_ROADMAP, USB_STABILITY_ISSUE
+- **No session logs at root** — they go in `sessions/`
+- **No scripts at root** — they go in a subdirectory
+- **No date-stamped files at root** — a date stamp means it's a session log
+- **Knowledge articles are conclusive** — they describe what IS, not what happened
+- Session logs capture findings → findings get consolidated into knowledge articles → session logs get moved to `sessions/`
+
 ## Development Model
 
 ### Git Flow

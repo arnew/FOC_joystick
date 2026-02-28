@@ -145,9 +145,8 @@ class QualityGoalsTestSuite:
                 print(log_msg, end="", flush=True)
     
     def _set_target(self, angle_deg: float):
-        """Set motor target angle via commander"""
-        angle_rad = math.radians(angle_deg)
-        cmd = f"T{angle_rad:.4f}\n"
+        """Set motor target angle via commander (T command expects degrees)"""
+        cmd = f"T{angle_deg:.2f}\n"
         self.ser.write(cmd.encode())
         time.sleep(0.1)  # Let command process
     
@@ -1076,11 +1075,14 @@ class QualityGoalsTestSuite:
         if not self.connect():
             return False
         
+        # Default positions for standard (non-matrix) run
+        default_positions = SEQUENCES["1_cardinal"]["positions"]
+        
         try:
-            self.test_a_resolution()
-            self.test_b_speed()
-            self.test_c_position_hold()
-            self.test_d_overshoot()
+            self.test_a_resolution(default_positions)
+            self.test_b_speed(default_positions)
+            self.test_c_position_hold(default_positions)
+            self.test_d_overshoot(default_positions)
             self.test_e_sequence_tame()
             self.test_f_sequence_fast()
             self.test_g_sequence_random_walk()
