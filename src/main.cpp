@@ -74,8 +74,9 @@ static void service_debug_output(unsigned long now_ms) {
 
   // Never block control loop on CDC when host is not draining serial.
   if (Serial && Serial.availableForWrite() >= DEBUG_MIN_WRITE_BYTES) {
-    char line[48];
-    snprintf(line, sizeof(line), "A=%.2f T=%.2f", get_motor_angle(0), target_angle[0]);
+    char line[64];
+    snprintf(line, sizeof(line), "A=%.2f T=%.2f JS=%d,%d", 
+             get_motor_angle(0), target_angle[0], axis_values[0], axis_values[1]);
     Serial.println(line);
   }
 
