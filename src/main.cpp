@@ -25,6 +25,7 @@
 #include "usb_hid.h"
 #include "commander_integration.h"
 #include "statistics.h"
+#include "telemetry.h"
 #include "profile_manager.h"
 #ifdef TRIM_WHEEL_PREVIEW
 #include "trim_wheel_preview.h"
@@ -35,10 +36,10 @@
 // ============================================================================
 
 static constexpr uint16_t HID_UPDATE_INTERVAL_MS = 20;      // 50 Hz
-static constexpr uint16_t DEBUG_UPDATE_INTERVAL_MS = 200;   // 5 Hz (reduced from 10Hz to avoid USB CDC congestion)
+// Debug output replaced by telemetry module (10Hz @T lines)
 static constexpr uint16_t MIDI_MAX_BYTES_PER_LOOP = 24;     // 8 CC messages max
 static constexpr uint32_t MIDI_BUDGET_US = 500;             // max MIDI time slice
-static constexpr size_t DEBUG_MIN_WRITE_BYTES = 32;
+
 
 static void service_midi_input() {
   uint32_t start_us = micros();
@@ -74,24 +75,7 @@ static void service_hid_output(unsigned long now_ms) {
   last_hid_ms = now_ms;
 }
 
-static void service_debug_output(unsigned long now_ms) {
-  static unsigned long last_debug_ms = 0;
-
-  if ((now_ms - last_debug_ms) < DEBUG_UPDATE_INTERVAL_MS) {
-    return;
-  }
-
-  // Never block control loop on CDC when host is not draining serial.
-  if (Serial && Serial.availableForWrite() >= DEBUG_MIN_WRITE_BYTES) {
-    char line[64];
-    snprintf(line, sizeof(line), "A=%.2f T=%.2f JS=%d,%d", 
-             get_motor_angle(0), target_angle[0], axis_values[0], axis_values[1]);
-    Serial.println(line);
-  }
-
-  // Keep cadence stable even if one cycle is skipped due to full USB CDC buffer.
-  last_debug_ms = now_ms;
-}
+// Debug output replaced by telemetry_output() — see telemetry.h
 
 // Magic bootloader reentry address for RP2040
 // When the host does a 1200bps reset (DTR toggle), this code detects it
@@ -163,6 +147,7 @@ void setup() {
   
   // Initialize statistics collection
   init_statistics();
+  init_telemetry();
 
   #ifdef TRIM_WHEEL_PREVIEW
   init_trim_wheel_preview();
@@ -182,6 +167,9 @@ void loop() {
   // 1. FOC control (~1kHz)
   update_motor(0);
 
+  // 2. Feed telemetry ring buffer (every FOC tick)
+  telemetry_update(target_angle[0], current_angle[0]);
+
   #ifdef TRIM_WHEEL_PREVIEW
   update_trim_wheel_preview();
   #endif
@@ -195,7 +183,7 @@ void loop() {
   // 4. USB outputs (scheduled)
   unsigned long now_ms = millis();
   service_hid_output(now_ms);
-  service_debug_output(now_ms);
+  telemetry_output(now_ms);
   
   // 5. Update statistics
   update_statistics_uptime();
