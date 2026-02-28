@@ -6,6 +6,7 @@ Motor Movement Test - Verify SimpleFOC motor responds to commands
 import sys
 import time
 import serial
+import statistics
 
 SERIAL_PORT = "/dev/ttyACM0"
 BAUD_RATE = 115200
