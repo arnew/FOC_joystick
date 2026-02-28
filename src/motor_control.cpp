@@ -4,6 +4,7 @@
 
 #include "motor_control.h"
 #include "pid_config.h"
+#include "statistics.h"
 
 // ============================================================================
 // MOTOR HARDWARE DEFINITIONS
@@ -129,6 +130,10 @@ void update_motor(uint8_t motor_id) {
   // target_angle[] is the single source of truth set by MIDI/Commander glue.
   motor->move(target_angle[motor_id]);
   
+  // Record position hold statistics
+  float error = abs(target_angle[motor_id] - current_angle[motor_id]);
+  record_motor_hold(motor_id, error);
+  
   // Diagnostic: detect if motor is stuck
   static unsigned long last_stuck_check = 0;
   static uint16_t stuck_count = 0;
@@ -161,6 +166,11 @@ void set_motor_target(uint8_t motor_id,
     get_motor_profile(motor_id);
   if (!profile) return;
   
+  // Record movement if target changed
+  if (abs(target_angle[motor_id] - angle) > 0.01f) {
+    record_motor_movement(motor_id);
+  }
+  
   handle_motor_limits(motor_id, angle);
   
   target_angle[motor_id] = angle;
@@ -185,6 +195,8 @@ void handle_motor_limits(uint8_t motor_id,
     get_motor_profile(motor_id);
   if (!profile) return;
   
+  float original_angle = angle;
+  
   if (profile->is_endless) {
     // Endless: wrap 0-2π
     while (angle < 0.0f) {
@@ -198,5 +210,10 @@ void handle_motor_limits(uint8_t motor_id,
     angle = constrain(angle, 
                       profile->min_angle, 
                       profile->max_angle);
+  }
+  
+  // Record if limit was hit
+  if (abs(angle - original_angle) > 0.01f) {
+    record_motor_limit(motor_id);
   }
 }

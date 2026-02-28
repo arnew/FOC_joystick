@@ -24,6 +24,7 @@
 #include "midi_handler.h"
 #include "usb_hid.h"
 #include "commander_integration.h"
+#include "statistics.h"
 
 // ============================================================================
 // I/O RATE SCHEDULING (USB CDC + MIDI + HID)
@@ -89,6 +90,30 @@ static void service_debug_output(unsigned long now_ms) {
 // and reboots to the bootloader without requiring manual BOOTSEL press
 
 // ============================================================================
+// SETUP HELPERS
+// ============================================================================
+
+static void print_configuration() {
+  Serial.println("\n=== Loaded Configuration ===");
+  Serial.print("Axes: ");
+  Serial.println(NUM_ACTIVE_AXES);
+  
+  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
+    Serial.print("  ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(ACTIVE_CONFIG[i].label);
+    Serial.print(" (M");
+    Serial.print(ACTIVE_CONFIG[i].motor_id);
+    Serial.print(", CC#");
+    Serial.print(ACTIVE_CONFIG[i].midi_cc);
+    Serial.println(")");
+  }
+  
+  Serial.println("\n=== Ready ===");
+}
+
+// ============================================================================
 // SETUP
 // ============================================================================
 
@@ -117,24 +142,11 @@ void setup() {
   // Initialize Commander (for CI testing and tuning)
   init_commander();
   
+  // Initialize statistics collection
+  init_statistics();
+  
   // Print configuration
-  Serial.println("\n=== Loaded Configuration ===");
-  Serial.print("Axes: ");
-  Serial.println(NUM_ACTIVE_AXES);
-  
-  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
-    Serial.print("  ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(ACTIVE_CONFIG[i].label);
-    Serial.print(" (M");
-    Serial.print(ACTIVE_CONFIG[i].motor_id);
-    Serial.print(", CC#");
-    Serial.print(ACTIVE_CONFIG[i].midi_cc);
-    Serial.println(")");
-  }
-  
-  Serial.println("\n=== Ready ===");
+  print_configuration();
 }
 
 // ============================================================================
@@ -142,6 +154,8 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  uint32_t loop_start = micros();
+  
   // 1. FOC control (~1kHz)
   update_motor(0);
 
@@ -155,4 +169,8 @@ void loop() {
   unsigned long now_ms = millis();
   service_hid_output(now_ms);
   service_debug_output(now_ms);
+  
+  // 5. Update statistics
+  update_statistics_uptime();
+  record_loop_timing(micros() - loop_start);
 }

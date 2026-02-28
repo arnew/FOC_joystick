@@ -23,6 +23,7 @@
 #include "commander_integration.h"
 #include "motor_control.h"
 #include "profile_manager.h"
+#include "statistics.h"
 
 // SimpleFOC Commander instance
 Commander commander = Commander(Serial, '\n', ' ');
@@ -45,6 +46,21 @@ static void cmd_set_target(char* cmd) {
   Serial.println(angle);
   Serial.print("[CMD] Verify: target_angle[0] = ");
   Serial.println(get_motor_target(0));
+}
+
+// Custom command: Statistics display
+// Format: S (show stats), S0 (reset counters)
+static void cmd_statistics(char* cmd) {
+  if (!cmd || !cmd[0]) {
+    // No argument: show statistics
+    print_statistics();
+    return;
+  }
+
+  uint8_t action = atoi(cmd);
+  if (action == 0) {
+    reset_statistics();
+  }
 }
 
 // Custom command: Profile switching
@@ -82,6 +98,7 @@ void init_commander() {
   // Register custom commands
   commander.add('T', cmd_set_target, (const char*)"set target directly");
   commander.add('A', cmd_switch_profile, (const char*)"aircraft profile (0=A320, 1=Cessna, 2=Glider)");
+  commander.add('S', cmd_statistics, (const char*)"statistics (S=show, S0=reset)");
   
   Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
   Serial.println("[COMMANDER] Commands available:");
@@ -89,9 +106,14 @@ void init_commander() {
   Serial.println("  T<angle>    - Set target directly");
   Serial.println("  A           - Show profile options");
   Serial.println("  A<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");
+  Serial.println("  S           - Show device statistics");
+  Serial.println("  S0          - Reset statistics counters");
 }
 
 void update_commander() {
   // Process serial commands (non-blocking)
+  if (Serial.available()) {
+    record_commander_cmd();
+  }
   commander.run();
 }

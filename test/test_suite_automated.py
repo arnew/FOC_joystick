@@ -651,6 +651,141 @@ class HIDControllerTestSuite:
             self.results.append(("MIDI→HID Passthrough", False, f"{passed_cases}/{len(test_cases)}"))
             return False
 
+    def test_device_statistics(self):
+        """Test 7: Device Statistics & Self-Inspection"""
+        print("\n" + "=" * 70)
+        print("TEST 7: Device Statistics & Self-Inspection")
+        print("=" * 70)
+        
+        if not self.debug_ser:
+            print("✗ FAIL: Debug port not available")
+            self.results.append(("Device Statistics", False, "No debug port"))
+            return False
+        
+        print("Requesting device statistics...")
+        
+        # Send 'S' command to get statistics
+        self.debug_ser.write(b'S\n')
+        time.sleep(0.5)  # Wait for response
+        
+        # Read statistics output
+        lines = self.read_debug_lines(timeout=2.0, max_lines=50)
+        
+        if not lines:
+            print("✗ FAIL: No response to statistics command")
+            self.results.append(("Device Statistics", False, "No response"))
+            return False
+        
+        # Parse statistics
+        stats = {
+            'uptime': None,
+            'loop_count': None,
+            'loop_min': None,
+            'loop_max': None,
+            'loop_avg': None,
+            'motor_movements': None,
+            'motor_holds': None,
+            'midi_messages': None,
+            'hid_reports': None,
+        }
+        
+        for line in lines:
+            if 'Uptime:' in line:
+                match = re.search(r'Uptime:\s+([\d.]+)', line)
+                if match:
+                    stats['uptime'] = float(match.group(1))
+            elif 'Iterations:' in line:
+                match = re.search(r'Iterations:\s+(\d+)', line)
+                if match:
+                    stats['loop_count'] = int(match.group(1))
+            elif 'Min:' in line:
+                match = re.search(r'Min:\s+(\d+)', line)
+                if match:
+                    stats['loop_min'] = int(match.group(1))
+            elif 'Max:' in line:
+                match = re.search(r'Max:\s+(\d+)', line)
+                if match:
+                    stats['loop_max'] = int(match.group(1))
+            elif 'Avg:' in line:
+                match = re.search(r'Avg:\s+(\d+)', line)
+                if match:
+                    stats['loop_avg'] = int(match.group(1))
+            elif 'Movements:' in line:
+                match = re.search(r'Movements:\s+(\d+)', line)
+                if match:
+                    stats['motor_movements'] = int(match.group(1))
+            elif 'Holds checked:' in line:
+                match = re.search(r'Holds checked:\s+(\d+)', line)
+                if match:
+                    stats['motor_holds'] = int(match.group(1))
+            elif 'MIDI messages:' in line:
+                match = re.search(r'MIDI messages:\s+(\d+)', line)
+                if match:
+                    stats['midi_messages'] = int(match.group(1))
+            elif 'HID reports:' in line:
+                match = re.search(r'HID reports:\s+(\d+)', line)
+                if match:
+                    stats['hid_reports'] = int(match.group(1))
+        
+        # Verify statistics are being collected
+        print(f"\nStatistics collected:")
+        print(f"  Uptime: {stats['uptime']:.3f} sec")
+        print(f"  Loop iterations: {stats['loop_count']}")
+        print(f"  Loop timing: {stats['loop_min']}µs / {stats['loop_avg']}µs / {stats['loop_max']}µs (min/avg/max)")
+        print(f"  Motor movements: {stats['motor_movements']}")
+        print(f"  Motor holds: {stats['motor_holds']}")
+        print(f"  MIDI messages: {stats['midi_messages']}")
+        print(f"  HID reports: {stats['hid_reports']}")
+        
+        # Validation checks
+        failures = []
+        
+        if stats['uptime'] is None or stats['uptime'] < 0:
+            failures.append("Uptime not valid")
+        
+        if stats['loop_count'] is None or stats['loop_count'] < 100:
+            failures.append("Loop count too low")
+        
+        if stats['loop_avg'] is None or stats['loop_avg'] < 100 or stats['loop_avg'] > 10000:
+            failures.append(f"Loop timing suspect: {stats['loop_avg']}µs")
+        
+        if stats['motor_holds'] is None or stats['motor_holds'] < 10:
+            failures.append("Motor holds not being tracked")
+        
+        if failures:
+            print(f"\n✗ FAIL: {', '.join(failures)}")
+            self.results.append(("Device Statistics", False, '; '.join(failures)))
+            return False
+        
+        # Test statistics reset
+        print("\nTesting statistics reset...")
+        self.debug_ser.write(b'S0\n')
+        time.sleep(0.5)
+        
+        # Request statistics again
+        self.debug_ser.write(b'S\n')
+        time.sleep(0.5)
+        lines = self.read_debug_lines(timeout=2.0, max_lines=50)
+        
+        # Check if counters were reset (loop count should be small now)
+        reset_confirmed = False
+        for line in lines:
+            if 'Iterations:' in line:
+                match = re.search(r'Iterations:\s+(\d+)', line)
+                if match:
+                    new_count = int(match.group(1))
+                    if new_count < stats['loop_count']:
+                        reset_confirmed = True
+                        print(f"  ✓ Statistics reset confirmed (iterations: {stats['loop_count']} → {new_count})")
+                    break
+        
+        if not reset_confirmed:
+            print("  ⚠ WARNING: Statistics reset not confirmed")
+        
+        print("\n✓ PASS: Device statistics working correctly")
+        self.results.append(("Device Statistics", True, None))
+        return True
+
     def test_motor_dynamics_highspeed(self):
         """Test 5b (Removed): High-speed motor dynamics capture
 
@@ -751,6 +886,7 @@ class HIDControllerTestSuite:
             'scaling': self.test_joystick_scaling,
             'sweep': self.test_motor_sweep,
             'passthrough': self.test_midi_to_hid_passthrough,
+            'statistics': self.test_device_statistics,
             'dynamics': self.test_motor_dynamics_highspeed,
         }
         
@@ -774,6 +910,7 @@ class HIDControllerTestSuite:
                 ('scaling', self.test_joystick_scaling),
                 ('sweep', self.test_motor_sweep),
                 ('passthrough', self.test_midi_to_hid_passthrough),
+                ('statistics', self.test_device_statistics),
             ]
             # Add dynamics only if monitor enabled
             if self.enable_monitor:
@@ -808,6 +945,8 @@ Available tests:
   midi         - Motor response to MIDI commands
   scaling      - Joystick output scaling
   sweep        - Motor sweep range and tracking
+  passthrough  - MIDI to HID passthrough verification
+  statistics   - Device self-inspection and statistics
   dynamics     - High-speed dynamics (requires --enable-monitor)
         """
     )
