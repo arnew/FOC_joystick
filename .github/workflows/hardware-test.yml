@@ -217,3 +217,48 @@ jobs:
             test/*.log
             test/*.json
           retention-days: 30
+
+  test-movement:
+    name: Test - Motor Movement
+    needs: [test-simple]
+    runs-on: [self-hosted, hardware]
+    continue-on-error: true  # Hardware tests are informational only
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python dependencies
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          source $HOME/ci-venv/bin/activate || true
+          pip install --upgrade pip pyserial
+      
+      - name: Run motor movement test
+        run: |
+          cd test
+          echo "=== Running Motor Movement Test ==="
+          echo "This test verifies:"
+          echo " - Motor responds to SimpleFOC Commander commands"
+          echo " - Motor physically moves when commanded"
+          echo " - Motor can reach target angles"
+          echo ""
+          python3 test_motor_movement.py || {
+            echo ""
+            echo "⚠ Motor movement test failed"
+            echo "This may indicate:"
+            echo " - Motor hardware issue"
+            echo " - PID tuning needed"
+            echo " - Physical obstruction"
+            exit 1
+          }
+      
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-movement-${{ github.run_number }}
+          path: |
+            test/*.log
+            test/*.json
+          retention-days: 30
