@@ -192,12 +192,93 @@ static const AxisProfile GLIDER_CONFIG[] = {
 #define NUM_GLIDER_AXES (sizeof(GLIDER_CONFIG) / sizeof(AxisProfile))
 
 // ============================================================================
+// PROFILE ENUMERATIONS
+// ============================================================================
+
+enum ProfileType {
+  PROFILE_A320 = 0,
+  PROFILE_CESSNA = 1,
+  PROFILE_GLIDER = 2,
+  NUM_PROFILES = 3
+};
+
+// Profile metadata for runtime switching
+struct ProfileMetadata {
+  const char* name;
+  const AxisProfile* config;
+  uint8_t num_axes;
+};
+
+// All available profiles
+static const ProfileMetadata ALL_PROFILES[NUM_PROFILES] = {
+  {
+    .name = "A320",
+    .config = A320_CONFIG,
+    .num_axes = NUM_A320_AXES
+  },
+  {
+    .name = "Cessna",
+    .config = CESSNA_CONFIG,
+    .num_axes = NUM_CESSNA_AXES
+  },
+  {
+    .name = "Glider",
+    .config = GLIDER_CONFIG,
+    .num_axes = NUM_GLIDER_AXES
+  }
+};
+
+// ============================================================================
 // ACTIVE CONFIGURATION
 // ============================================================================
-// Currently using A320 profile by default
-// To switch profiles at compile time, change the following:
+// Runtime-selectable profile (default: A320)
+// Change at compile-time or runtime with set_active_profile()
 #define ACTIVE_CONFIG A320_CONFIG
 #define NUM_ACTIVE_AXES NUM_A320_AXES
+
+// Global runtime profile selection
+static volatile ProfileType g_active_profile = PROFILE_A320;
+
+/**
+ * Set active profile at runtime
+ * @param profile Profile to activate (PROFILE_A320, PROFILE_CESSNA, PROFILE_GLIDER)
+ */
+static inline void set_active_profile(ProfileType profile) {
+  if (profile < NUM_PROFILES) {
+    g_active_profile = profile;
+  }
+}
+
+/**
+ * Get active profile
+ * @return Current active profile type
+ */
+static inline ProfileType get_active_profile() {
+  return g_active_profile;
+}
+
+/**
+ * Get active profile metadata
+ * @return Pointer to active profile metadata
+ */
+static inline const ProfileMetadata* get_profile_metadata() {
+  return &ALL_PROFILES[g_active_profile];
+}
+
+/**
+ * Find axis by CC in current active profile
+ * @param midi_cc MIDI control change number
+ * @return Pointer to AxisProfile if found, NULL otherwise
+ */
+static inline const AxisProfile* find_axis_by_cc_runtime(uint8_t midi_cc) {
+  const ProfileMetadata* meta = get_profile_metadata();
+  for (uint8_t i = 0; i < meta->num_axes; i++) {
+    if (meta->config[i].midi_cc == midi_cc) {
+      return &meta->config[i];
+    }
+  }
+  return NULL;
+}
 
 #define NUM_MOTORS 1
 
@@ -206,17 +287,12 @@ static const AxisProfile GLIDER_CONFIG[] = {
 // ============================================================================
 
 /**
- * Find axis profile by MIDI CC number
+ * Find axis profile by MIDI CC number (uses runtime profile)
  * @param midi_cc MIDI control change number
  * @return Pointer to AxisProfile if found, NULL otherwise
  */
 static inline const AxisProfile* find_axis_by_cc(uint8_t midi_cc) {
-  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
-    if (ACTIVE_CONFIG[i].midi_cc == midi_cc) {
-      return &ACTIVE_CONFIG[i];
-    }
-  }
-  return NULL;
+  return find_axis_by_cc_runtime(midi_cc);
 }
 
 /**
