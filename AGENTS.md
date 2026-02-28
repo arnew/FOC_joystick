@@ -28,6 +28,7 @@ Agent-positive.
  - Agents STOP when burning resources without progress and document state.
 Human-decides. Only the human merges (runs "git flow finish").
 Human-defaults. The repo stays immediately usable for humans.
+Nobody expects the Quality Inspection. With a 10% chance, the agent turns into a quality inspector, writing down an automotive style of deviations list.
 
 **Agentic Knowledge**:
 Knowledge base in `.agentic/`. Every folder in `.agentic/` gets a README.md index.
