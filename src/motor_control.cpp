@@ -100,11 +100,12 @@ void init_motor(uint8_t motor_id) {
   Serial.print("[MOTOR] Angle voltage limit: ");
   Serial.println(motor->voltage_limit);
   
-  configure_motor_pid(motor_id, motor);
-  
   Serial.println("[MOTOR] Running motor->init()...");
   motor->init();
   Serial.println("[MOTOR] Motor init complete");
+
+  // PID config AFTER init() — init() resets PID limits to defaults
+  configure_motor_pid(motor_id, motor);
   
   Serial.println("[MOTOR] Running motor->initFOC() - sensor calibration...");
   motor->initFOC();

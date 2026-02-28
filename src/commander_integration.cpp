@@ -75,6 +75,12 @@ static void cmd_statistics(char* cmd) {
   }
 }
 
+// Motor command passthrough for runtime PID tuning.
+// Registered as 'M' → user sends MAP10.0 for angle P, etc.
+static void cmd_motor(char* cmd) {
+  commander.motor(&motor0, cmd);
+}
+
 // Custom command: Profile switching
 // Format: P (show available), P0 (switch to A320), P1 (Cessna), P2 (Glider)
 static void cmd_switch_profile(char* cmd) {
@@ -96,17 +102,19 @@ static void cmd_switch_profile(char* cmd) {
 }
 
 void init_commander() {
-  // Register motor 0 with commander
-  // This gives access to all SimpleFOC motor commands:
-  // - T: target angle
-  // - P: PID P gain
-  // - I: PID I gain  
-  // - D: PID D gain
-  // - L: voltage limit
-  // - C: motion test
-  // - ?: status
-  commander.motor(&motor0, (const char*)"M0");
-  
+  // Register motor 0 for runtime PID tuning via SimpleFOC Commander.
+  // Send 'M' prefix followed by motor sub-commands:
+  //   MAP  / MAP10.0   - angle PID P (query / set)
+  //   MAI  / MAI0.3    - angle PID I
+  //   MAD  / MAD2.0    - angle PID D
+  //   MAL  / MAL4.0    - angle PID output limit (velocity setpoint limit)
+  //   MAF  / MAF0.01   - angle LPF Tf
+  //   MVP  / MVP0.2    - velocity PID P
+  //   MVI  / MVI0.5    - velocity PID I
+  //   MLU  / MLU2.0    - voltage limit
+  //   ME   / ME1       - enable/disable
+  commander.add('M', cmd_motor, (const char*)"motor PID (MAP/MAI/MAD/MVP/MVI/MAL/MAF)");
+
   // Register custom commands
   commander.add('T', cmd_set_target, (const char*)"set target directly");
   commander.add('A', cmd_switch_profile, (const char*)"aircraft profile (0=A320, 1=Cessna, 2=Glider)");
@@ -114,7 +122,9 @@ void init_commander() {
   
   Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
   Serial.println("[COMMANDER] Commands available:");
-  Serial.println("  M0          - Motor 0 access (T, P, I, D, L, C, ?)");
+  Serial.println("  MAP/MAI/MAD - Angle PID (query/set, e.g. MAP10.0)");
+  Serial.println("  MVP/MVI     - Velocity PID");
+  Serial.println("  MAL/MAF     - Angle limit / LPF Tf");
   Serial.println("  T<angle>    - Set target directly");
   Serial.println("  A           - Show profile options");
   Serial.println("  A<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");

@@ -34,14 +34,18 @@
 // Iteration 15: D=2.5 + vel_limit=3 + LPF=0.02 → D-kick back (15.4°), revert
 // Iteration 16: back to 14 PID, widen unloaded limits to match 2V physics
 //   180° limit cycle is physical: 2V can't damp 7pp motor from 90° approach
-#define MOTOR0_PID_P  10.0f   // Solid authority at 2V
-#define MOTOR0_PID_I  0.3f*0.3    // Steady-state pull
-#define MOTOR0_PID_D  2.0f*0    // Sweet spot (D=2.5 caused D-kick at 2V too)
+// Iteration 17: Automated coordinate descent optimizer (pid_optimizer.py)
+//   8 rounds, cost 689→115. Key insight: LPF_Tf=0.001 removes phase lag.
+//   D=1.0 (not 2.0), vel_P=0.1 (gentler), angle_lim=4.0, P=12.
+//   3/4 cardinal settled, validation: 2/4 settled, err=5.5°, overshoot=9.4°.
+#define MOTOR0_PID_P  12.0f    // Higher authority with low LPF phase lag
+#define MOTOR0_PID_I  0.2f     // Steady-state pull
+#define MOTOR0_PID_D  1.0f     // Moderate damping (less D-kick than 2.0 at 2V)
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
-#define MOTOR0_VELOCITY_P  0.2f    // Gentle velocity tracking (2V budget)
-#define MOTOR0_VELOCITY_I  0.5f *0.3   // Moderate integral with reset
-#define MOTOR0_VELOCITY_D  0.0f    // D for velocity loop
+#define MOTOR0_VELOCITY_P  0.1f     // Gentle velocity tracking
+#define MOTOR0_VELOCITY_I  0.5f     // Integral with reset on target change
+#define MOTOR0_VELOCITY_D  0.0f     // D for velocity loop
 
 // Motor 0 Limits
 #define MOTOR0_VOLTAGE_LIMIT  2.0f     // Thermal-safe limit
@@ -50,9 +54,8 @@
 #define MOTOR0_ACCELERATION   10.0f    // Max rad/s² (optional soft-start)
 
 // Low-Pass Filter for angle measurement
-// SimpleFOC DEF_VEL_FILTER_Tf = 0.005f (5ms velocity filter)
-// Tf = time constant (larger = smoother but slower response)
-#define MOTOR0_LPF_ANGLE_TF  0.01f     // 10ms filter (0.02 too slow for settle)
+// Smaller Tf = faster response, less phase lag (critical for settling)
+#define MOTOR0_LPF_ANGLE_TF  0.001f    // 1ms filter (optimizer found 0.01 too slow)
 
 // Motor 1 PID Gains (if enabled)
 #if NUM_MOTORS > 1
