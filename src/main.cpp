@@ -25,6 +25,7 @@
 #include "usb_hid.h"
 #include "commander_integration.h"
 #include "statistics.h"
+#include "profile_manager.h"
 #ifdef TRIM_WHEEL_PREVIEW
 #include "trim_wheel_preview.h"
 #endif
@@ -101,19 +102,23 @@ static void service_debug_output(unsigned long now_ms) {
 // ============================================================================
 
 static void print_configuration() {
+  const ProfileMetadata* meta = get_profile_metadata();
+
   Serial.println("\n=== Loaded Configuration ===");
+  Serial.print("Profile: ");
+  Serial.println(meta->name);
   Serial.print("Axes: ");
-  Serial.println(NUM_ACTIVE_AXES);
+  Serial.println(meta->num_axes);
   
-  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
+  for (uint8_t i = 0; i < meta->num_axes; i++) {
     Serial.print("  ");
     Serial.print(i);
     Serial.print(": ");
-    Serial.print(ACTIVE_CONFIG[i].label);
+    Serial.print(meta->config[i].label);
     Serial.print(" (M");
-    Serial.print(ACTIVE_CONFIG[i].motor_id);
+    Serial.print(meta->config[i].motor_id);
     Serial.print(", CC#");
-    Serial.print(ACTIVE_CONFIG[i].midi_cc);
+    Serial.print(meta->config[i].midi_cc);
     Serial.println(")");
   }
   
@@ -125,6 +130,10 @@ static void print_configuration() {
 // ============================================================================
 
 void setup() {
+  // Load persistent software-selected profile first.
+  init_profile_manager();
+  configure_usb_identity_from_profile();
+
   // Initialize USB/Serial FIRST (before motor init) for bootloader reentry
   setup_usb_hid();
   Serial.begin(115200);

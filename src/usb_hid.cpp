@@ -121,12 +121,11 @@ uint16_t angle_to_joystick_value(
        profile->min_angle);
   }
   
-  // Apply axis reversal
-  for (uint8_t i = 0; 
-       i < NUM_ACTIVE_AXES; i++) {
-    if (ACTIVE_CONFIG[i].motor_id == 
-        motor_id) {
-      if (ACTIVE_CONFIG[i].reversed) {
+  // Apply axis reversal (runtime-selected profile)
+  const ProfileMetadata* meta = get_profile_metadata();
+  for (uint8_t i = 0; i < meta->num_axes; i++) {
+    if (meta->config[i].motor_id == motor_id) {
+      if (meta->config[i].reversed) {
         normalized = 1.0f - normalized;
       }
       break;

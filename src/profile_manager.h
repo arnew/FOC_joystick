@@ -1,8 +1,9 @@
 /**
  * profile_manager.h - Runtime Aircraft Profile Management
  * 
- * Allows switching between aircraft profiles (A320, Cessna, Glider) without recompiling
- * Via Commander interface: P<num> command
+ * Allows switching between aircraft profiles (A320, Cessna, Glider) without recompiling.
+ * Selected profile is persisted and restored on boot.
+ * USB identity (product name / PID) follows selected profile at startup.
  */
 
 #ifndef PROFILE_MANAGER_H
@@ -10,47 +11,13 @@
 
 #include "config.h"
 
-/**
- * Print all available profiles
- */
-static void print_available_profiles() {
-  Serial.println("\n[PROFILES] Available aircraft profiles:");
-  for (uint8_t i = 0; i < NUM_PROFILES; i++) {
-    Serial.print("  ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(ALL_PROFILES[i].name);
-  }
-}
+void init_profile_manager();
+void configure_usb_identity_from_profile();
 
-/**
- * Switch to a specific profile
- * @param profile_id Profile index (0=A320, 1=Cessna, 2=Glider)
- * @return true if successful, false if invalid index
- */
-static bool switch_to_profile(uint8_t profile_id) {
-  if (profile_id >= NUM_PROFILES) {
-    return false;
-  }
-  
-  set_active_profile((ProfileType)profile_id);
-  
-  Serial.print("[PROFILES] Switched to: ");
-  Serial.println(ALL_PROFILES[profile_id].name);
-  
-  Serial.print("  Axes: ");
-  Serial.println(ALL_PROFILES[profile_id].num_axes);
-  
-  return true;
-}
+void print_available_profiles();
+void print_active_profile();
 
-/**
- * Print current active profile
- */
-static void print_active_profile() {
-  ProfileType active = get_active_profile();
-  Serial.print("[PROFILES] Current: ");
-  Serial.println(ALL_PROFILES[active].name);
-}
+bool switch_to_profile(uint8_t profile_id);
+bool save_active_profile();
 
 #endif // PROFILE_MANAGER_H

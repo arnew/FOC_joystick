@@ -229,33 +229,13 @@ static const ProfileMetadata ALL_PROFILES[NUM_PROFILES] = {
 };
 
 // ============================================================================
-// ACTIVE CONFIGURATION
+// ACTIVE CONFIGURATION (RUNTIME STATE)
 // ============================================================================
-// Runtime-selectable profile (default: A320)
-// Change at compile-time or runtime with set_active_profile()
-#define ACTIVE_CONFIG A320_CONFIG
-#define NUM_ACTIVE_AXES NUM_A320_AXES
 
-// Global runtime profile selection
-static volatile ProfileType g_active_profile = PROFILE_A320;
+extern volatile ProfileType g_active_profile;
 
-/**
- * Set active profile at runtime
- * @param profile Profile to activate (PROFILE_A320, PROFILE_CESSNA, PROFILE_GLIDER)
- */
-static inline void set_active_profile(ProfileType profile) {
-  if (profile < NUM_PROFILES) {
-    g_active_profile = profile;
-  }
-}
-
-/**
- * Get active profile
- * @return Current active profile type
- */
-static inline ProfileType get_active_profile() {
-  return g_active_profile;
-}
+void set_active_profile(ProfileType profile);
+ProfileType get_active_profile();
 
 /**
  * Get active profile metadata
@@ -301,7 +281,16 @@ static inline const AxisProfile* find_axis_by_cc(uint8_t midi_cc) {
  * @return Pointer to MotorProfile if valid, NULL otherwise
  */
 static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
-  if (motor_id == 0) return &MOTOR_0_ENDLESS;
+  if (motor_id != 0) {
+    return NULL;
+  }
+
+  #ifdef MOTOR_LIMITED
+  return &MOTOR_0_LIMITED;
+  #else
+  return &MOTOR_0_ENDLESS;
+  #endif
+
   return NULL;
 }
 
@@ -311,9 +300,10 @@ static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
  * @return Pointer to first AxisProfile for motor, NULL if none found
  */
 static inline const AxisProfile* find_axis_by_motor(uint8_t motor_id) {
-  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
-    if (ACTIVE_CONFIG[i].motor_id == motor_id) {
-      return &ACTIVE_CONFIG[i];
+  const ProfileMetadata* meta = get_profile_metadata();
+  for (uint8_t i = 0; i < meta->num_axes; i++) {
+    if (meta->config[i].motor_id == motor_id) {
+      return &meta->config[i];
     }
   }
   return NULL;
@@ -325,9 +315,10 @@ static inline const AxisProfile* find_axis_by_motor(uint8_t motor_id) {
  * @return Number of axes assigned to motor
  */
 static inline uint8_t count_axes_for_motor(uint8_t motor_id) {
+  const ProfileMetadata* meta = get_profile_metadata();
   uint8_t count = 0;
-  for (uint8_t i = 0; i < NUM_ACTIVE_AXES; i++) {
-    if (ACTIVE_CONFIG[i].motor_id == motor_id) {
+  for (uint8_t i = 0; i < meta->num_axes; i++) {
+    if (meta->config[i].motor_id == motor_id) {
       count++;
     }
   }
