@@ -39,26 +39,54 @@ platformio run -e pico_1motor_endless
 # (Hold BOOTSEL, then it uploads)
 ```
 
-### Runtime Selection (NEW!)
+### Runtime Selection via Serial Commands
 
-Switch aircraft profiles **without recompiling** via serial commands:
+Switch aircraft profiles **without recompiling** via serial commands using the `A` command:
 
 ```bash
-# Show available profiles
-> P
+# Show available profiles and current profile
+A
 
 # Switch to A320
-> P0
+A0
 
 # Switch to Cessna
-> P1
+A1
 
 # Switch to Glider
-> P2
-
-# Check current profile
-> P
+A2
 ```
+
+Example:
+```
+> A
+[PROFILES] Available aircraft profiles:
+  0: A320
+  1: Cessna
+  2: Glider
+[PROFILES] Current: A320
+
+> A1
+[PROFILES] Switched to: Cessna
+  Axes: 4
+
+> A
+[PROFILES] Current: Cessna
+```
+
+### Runtime Selection via MIDI
+
+Switch profiles using MIDI Control Change message **CC#121**:
+
+| CC#121 Value | Profile  |
+|--------------|----------|
+| 0            | A320     |
+| 1            | Cessna   |
+| 2            | Glider   |
+
+**Example:** Send `CC#121` with value `0` to switch to A320 profile.
+
+The profile switches immediately. All axis mappings (CC#7, CC#11, etc.) update to the new profile's configuration.
 
 Use any serial terminal (Arduino IDE, minicom, `picocom`, etc.) connected to `/dev/ttyACM0`.
 

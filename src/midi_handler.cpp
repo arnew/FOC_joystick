@@ -5,6 +5,13 @@
 #include "midi_handler.h"
 #include "motor_control.h"
 #include "config.h"
+#include "profile_manager.h"
+
+// ============================================================================
+// MIDI PROFILE CONTROL
+// ============================================================================
+// CC#121 = Profile Select (0=A320, 1=Cessna, 2=Glider)
+#define MIDI_CC_PROFILE_SELECT 121
 
 // ============================================================================
 // MIDI PARSER STATE
@@ -67,12 +74,21 @@ void process_midi_message(uint8_t status,
     return;
   }
   
+  // Handle profile selection (MIDI CC#121)
+  if (cc_number == MIDI_CC_PROFILE_SELECT) {
+    uint8_t profile_id = cc_value % NUM_PROFILES;
+    if (switch_to_profile(profile_id)) {
+      Serial.print("[MIDI] Profile switched to: ");
+      Serial.println(ALL_PROFILES[profile_id].name);
+    }
+    return;
+  }
+  
   // Find axis for this CC
   const AxisProfile* axis = 
     find_axis_by_cc(cc_number);
   if (!axis) {
-    Serial.print("MIDI: Unknown CC#");
-    Serial.println(cc_number);
+    // Silently ignore unknown CC (not an error)
     return;
   }
   
@@ -97,5 +113,4 @@ void process_midi_message(uint8_t status,
   Serial.print(axis->motor_id);
   Serial.print(" angle: ");
   Serial.println(target, 4);
-  */
-}
+  */}

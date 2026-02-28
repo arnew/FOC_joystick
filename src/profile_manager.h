@@ -13,7 +13,7 @@
 /**
  * Print all available profiles
  */
-void print_available_profiles() {
+static void print_available_profiles() {
   Serial.println("\n[PROFILES] Available aircraft profiles:");
   for (uint8_t i = 0; i < NUM_PROFILES; i++) {
     Serial.print("  ");
@@ -28,7 +28,7 @@ void print_available_profiles() {
  * @param profile_id Profile index (0=A320, 1=Cessna, 2=Glider)
  * @return true if successful, false if invalid index
  */
-bool switch_to_profile(uint8_t profile_id) {
+static bool switch_to_profile(uint8_t profile_id) {
   if (profile_id >= NUM_PROFILES) {
     return false;
   }
@@ -47,7 +47,7 @@ bool switch_to_profile(uint8_t profile_id) {
 /**
  * Print current active profile
  */
-void print_active_profile() {
+static void print_active_profile() {
   ProfileType active = get_active_profile();
   Serial.print("[PROFILES] Current: ");
   Serial.println(ALL_PROFILES[active].name);

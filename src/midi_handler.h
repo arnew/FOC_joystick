@@ -1,10 +1,16 @@
 /**
  * midi_handler.h - USB MIDI Input Handler
  * 
- * Handles MIDI CC messages for motor control:
+ * Handles MIDI CC messages for motor control and profile selection:
  * - 3-byte MIDI message parsing
  * - State machine for message assembly
  * - CC to motor angle mapping
+ * - Profile switching via MIDI CC#121
+ 
+ * Profile Selection (MIDI):
+ *   CC#121 value 0   → Switch to A320 profile
+ *   CC#121 value 1   → Switch to Cessna profile
+ *   CC#121 value 2   → Switch to Glider profile
  */
 
 #ifndef MIDI_HANDLER_H

@@ -81,14 +81,14 @@ void init_commander() {
   
   // Register custom commands
   commander.add('T', cmd_set_target, "set target directly");
-  commander.add('P', cmd_switch_profile, "aircraft profile (0=A320, 1=Cessna, 2=Glider)");
+  commander.add('A', cmd_switch_profile, "aircraft profile (0=A320, 1=Cessna, 2=Glider)");
   
   Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
   Serial.println("[COMMANDER] Commands available:");
   Serial.println("  M0          - Motor 0 access (T, P, I, D, L, C, ?)");
   Serial.println("  T<angle>    - Set target directly");
-  Serial.println("  P           - Show profile options");
-  Serial.println("  P<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");
+  Serial.println("  A           - Show profile options");
+  Serial.println("  A<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");
 }
 
 void update_commander() {
