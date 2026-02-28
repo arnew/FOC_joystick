@@ -23,6 +23,9 @@
 ├─ PURPOSE.md                        ⭐ What this project is
 ├─ AGENT_GUIDELINES.md               ⭐ How agents work
 ├─ KNOWLEDGE_BASE.md                 ⭐ Technical baseline
+├─ QUALITY_INSPECTION_2026-02-28.md  ✅ Latest quality inspection (live build)
+├─ QUALITY_VALIDATION_SUMMARY.md     ✅ Quality goals validation
+├─ QUALITY_REVIEW_2026-02-28.md      ✅ Comprehensive code quality review
 ├─ FAILED_EXPERIMENTS.md             📚 What didn't work (PID tuning, dual-motor)
 ├─ REMOVED_UNTESTED_CODE.md          📚 Code cleanup history
 ├─ USB_STABILITY_ISSUE.md            🔧 USB bandwidth fix details
@@ -44,6 +47,7 @@
 - **New to project?** → [PURPOSE.md](PURPOSE.md) → [AGENT_GUIDELINES.md](AGENT_GUIDELINES.md) → [KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)
 - **Need to build?** → [KNOWLEDGE_BASE.md#working-baseline](KNOWLEDGE_BASE.md#working-baseline)
 - **Want to run tests?** → [DEVICE_TESTING.md](DEVICE_TESTING.md) (decide local vs CI)
+- **Check quality status?** → [QUALITY_INSPECTION_2026-02-28.md](QUALITY_INSPECTION_2026-02-28.md)
 - **Testing & CI workflow?** → [ci/GITHUB_INTEGRATION.md](ci/GITHUB_INTEGRATION.md)
 - **Motor not moving?** → [MOTOR_DEBUGGING_SESSION.md](MOTOR_DEBUGGING_SESSION.md)
 - **Code refactoring?** → [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md)
@@ -87,6 +91,8 @@
 | System architecture | [architecture/PLANNING.md](architecture/PLANNING.md) |
 | Build & upload firmware | [architecture/QUICKSTART.md](architecture/QUICKSTART.md) |
 | Running tests (local/CI) | [DEVICE_TESTING.md](DEVICE_TESTING.md) |
+| Quality inspection | [QUALITY_INSPECTION_2026-02-28.md](QUALITY_INSPECTION_2026-02-28.md) |
+| Quality validation | [QUALITY_VALIDATION_SUMMARY.md](QUALITY_VALIDATION_SUMMARY.md) |
 | Debugging motor control | [MOTOR_DEBUGGING_SESSION.md](MOTOR_DEBUGGING_SESSION.md) |
 | Code refactoring plan | [architecture/REFACTORING_PLAN.md](architecture/REFACTORING_PLAN.md) |
 | Code style guidelines | [architecture/README.md](architecture/README.md) |
