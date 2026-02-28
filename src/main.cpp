@@ -25,6 +25,9 @@
 #include "usb_hid.h"
 #include "commander_integration.h"
 #include "statistics.h"
+#ifdef TRIM_WHEEL_PREVIEW
+#include "trim_wheel_preview.h"
+#endif
 
 // ============================================================================
 // I/O RATE SCHEDULING (USB CDC + MIDI + HID)
@@ -60,7 +63,11 @@ static void service_hid_output(unsigned long now_ms) {
     return;
   }
 
+  #ifdef TRIM_WHEEL_PREVIEW
+  axis_values[0] = get_trim_wheel_hid_value();
+  #else
   axis_values[0] = angle_to_joystick_value(0);
+  #endif
   axis_values[1] = angle_to_joystick_value(1);
   send_hid_report();
   last_hid_ms = now_ms;
@@ -130,6 +137,9 @@ void setup() {
   Serial.println("USB: CDC /dev/ttyACM0 (115200)");
   Serial.println("     Native MIDI port");
   Serial.println("     HID Joystick (8btn + 2axis)");
+  #ifdef TRIM_WHEEL_PREVIEW
+  Serial.println("Mode: Cessna trim preview (click detents + end stops)");
+  #endif
   
   // NOW initialize motor (after USB is fully ready)
   Serial.println("Initializing Motor 0...");
@@ -144,6 +154,10 @@ void setup() {
   
   // Initialize statistics collection
   init_statistics();
+
+  #ifdef TRIM_WHEEL_PREVIEW
+  init_trim_wheel_preview();
+  #endif
   
   // Print configuration
   print_configuration();
@@ -158,6 +172,10 @@ void loop() {
   
   // 1. FOC control (~1kHz)
   update_motor(0);
+
+  #ifdef TRIM_WHEEL_PREVIEW
+  update_trim_wheel_preview();
+  #endif
 
   // 2. MIDI input (bounded burst handling)
   service_midi_input();

@@ -33,9 +33,11 @@ Profiles are selected during compile time, or set via midi command. Joystick is 
 **Hardware Configurations**:
 Buildable configurations support different hardware setups:
 - **pico_1motor_endless** — Single endless motor (current hardware, trim-like)
+- **pico_trim_preview** — Cessna-style trim wheel preview (click detents + top/bottom end stops, HID axis)
 - **pico_1motor_limited** — Single 0-180° motor (throttle/flaps-like)
 
 Build with: `platformio run -e pico_1motor_endless`
+Preview build: `platformio run -e pico_trim_preview --target upload`
 
 **Quality Goals**
 Resolution: 1 degree or better.

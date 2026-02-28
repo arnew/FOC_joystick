@@ -193,6 +193,10 @@ void update_motor(uint8_t motor_id) {
   }
   
   // Enter idle mode if target reached and no motion for IDLE_TIMEOUT
+  #ifdef TRIM_WHEEL_PREVIEW
+  // Keep torque active for haptic clicks/end-stops.
+  motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
+  #else
   if (now - last_movement_time[motor_id] > MOTOR_IDLE_TIMEOUT_MS) {
     // At rest - reduce voltage to 0 to prevent heat buildup
     motor->voltage_limit = 0.0f;  // No current draw
@@ -200,6 +204,7 @@ void update_motor(uint8_t motor_id) {
     // In motion - restore full voltage
     motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
   }
+  #endif
   
   // Command motor to reach target angle.
   // target_angle[] is the single source of truth set by MIDI/Commander glue.
