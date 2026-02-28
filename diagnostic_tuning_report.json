@@ -1,0 +1,124 @@
+{
+  "timestamp": "2026-02-28T10:41:42.320997",
+  "device": "/dev/ttyACM0",
+  "pid_config": {
+    "angle_I": 0.0,
+    "angle_D": 6.12,
+    "velocity_P": 6.1,
+    "velocity_I": 6.12,
+    "voltage_limit": 0.0,
+    "current_limit": 6.11
+  },
+  "limits": {
+    "max_angle_deg": 350.077212824933
+  },
+  "statistics": {},
+  "settling_analyses": [
+    {
+      "target_deg": 0,
+      "final_error_deg": 14.725015334862158,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 350.6501706200638,
+      "undershoot_deg": 0,
+      "oscillation_detected": false,
+      "rms_error": 95.77880550126085,
+      "trace_length": 28
+    },
+    {
+      "target_deg": 45,
+      "final_error_deg": 0.4766167018889604,
+      "settled": true,
+      "settle_time_ms": 1194.5648193359375,
+      "overshoot_deg": 0.2636658153350382,
+      "undershoot_deg": 31.249012916860245,
+      "oscillation_detected": true,
+      "rms_error": 15.78649039703633,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 90,
+      "final_error_deg": 12.077739862208034,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 0,
+      "undershoot_deg": 45.88224977492661,
+      "oscillation_detected": false,
+      "rms_error": 24.534753059323332,
+      "trace_length": 36
+    },
+    {
+      "target_deg": 135,
+      "final_error_deg": 14.67886302252711,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 0,
+      "undershoot_deg": 57.077739862208034,
+      "oscillation_detected": false,
+      "rms_error": 29.63419297847928,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 180,
+      "final_error_deg": 10.40449264127633,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 0,
+      "undershoot_deg": 59.67886302252711,
+      "oscillation_detected": false,
+      "rms_error": 29.28692850426971,
+      "trace_length": 36
+    },
+    {
+      "target_deg": 225,
+      "final_error_deg": 0.9735021038481193,
+      "settled": true,
+      "settle_time_ms": 1176.3384342193604,
+      "overshoot_deg": 0,
+      "undershoot_deg": 55.97745043640714,
+      "oscillation_detected": false,
+      "rms_error": 24.92516236692937,
+      "trace_length": 36
+    },
+    {
+      "target_deg": 270,
+      "final_error_deg": 6.210231121769004,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 0,
+      "undershoot_deg": 45.97350210384812,
+      "oscillation_detected": false,
+      "rms_error": 19.715482011386747,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 315,
+      "final_error_deg": 13.051241966056182,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 0,
+      "undershoot_deg": 51.43941423982136,
+      "oscillation_detected": false,
+      "rms_error": 23.80536619952589,
+      "trace_length": 35
+    }
+  ],
+  "recommendations": [
+    "\u2757 HIGH STEADY-STATE ERROR (avg 9.07\u00b0)",
+    "   \u2192 Increase angle_P (currently 10.0, try 15.0)",
+    "   \u2192 OR increase angle_I (currently 0.0, try 0.1-0.5)",
+    "   \u2192 Check sensor alignment and mechanical friction",
+    "\u2757 HIGH OVERSHOOT (avg 43.86\u00b0)",
+    "   \u2192 Reduce angle_P (currently 10.0, try 7.0)",
+    "   \u2192 Increase angle_D (currently 6.1, try 12.2)",
+    "\u26a0\ufe0f  LOW VOLTAGE LIMIT (0.0V)",
+    "   \u2192 Consider increasing if motor performance is sluggish",
+    "   \u2192 Check motor specs for safe operating voltage"
+  ],
+  "summary": {
+    "avg_final_error_deg": 9.074712844304488,
+    "avg_overshoot_deg": 43.86422955442486,
+    "settled_count": 2,
+    "total_tests": 8
+  }
+}

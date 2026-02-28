@@ -16,20 +16,23 @@
  */
 
 // Motor 0 PID Gains (Angle Controller)
-// Based on SimpleFOC defaults.h for RP2040 (non-AVR controller)
-// DEF_P_ANGLE_P = 20.0f (SimpleFOC default angle P controller)
-#define MOTOR0_PID_P  20.0f*0.5   // Proportional gain (SimpleFOC default for angle control)
-#define MOTOR0_PID_I  0.0f    // Integral gain (angular position, usually minimal)
-#define MOTOR0_PID_D  0.5f    // Derivative gain (damping, reduces oscillation)
+// Tuned 2026-02-28: Conservative integral action to avoid overshoot & heat
+// Iteration 1: P=12.0, I=0.2, D=0.8 (0% settled, 3.81° avg error, 6° overshoot, oscillating)
+// Iteration 2: P=12.0, I=1.0, D=0.8 (UNSTABLE - motor overheating, timeouts)
+// Iteration 3: P=12.0, I=0.4, D=0.8 (balanced: error elimination without instability)
+#define MOTOR0_PID_P  12.0f   // Maintains control authority
+#define MOTOR0_PID_I  0.4f    // Moderate integral - eliminates drift without instability
+#define MOTOR0_PID_D  0.8f    // Good damping
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
-// Based on SimpleFOC defaults: DEF_PID_VEL_P=0.5f, DEF_PID_VEL_I=10.0f, DEF_PID_VEL_D=0.0f
-#define MOTOR0_VELOCITY_P  0.5f*0.25   // P for velocity loop (SimpleFOC default)
-#define MOTOR0_VELOCITY_I  10.0f*0.0  // I for velocity loop (SimpleFOC default, reduces steady-state error)
-#define MOTOR0_VELOCITY_D  0.0f   // D for velocity loop
+// Tuned 2026-02-28: Re-enable velocity I term for smoother movement
+#define MOTOR0_VELOCITY_P  0.25f   // P for velocity loop
+#define MOTOR0_VELOCITY_I  5.0f    // Re-enabled from 0.0 for smooth transitions
+#define MOTOR0_VELOCITY_D  0.0f    // D for velocity loop
 
 // Motor 0 Voltage & Current Limits
-#define MOTOR0_VOLTAGE_LIMIT  2.0f     // Maximum voltage applied (0-12V)
+// Tuned 2026-02-28: Increased voltage for more control authority
+#define MOTOR0_VOLTAGE_LIMIT  3.0f     // Increased from 2.0V for better response (0-12V)
 #define MOTOR0_CURRENT_LIMIT  2.0f     // Maximum current from sensor (optional, SimpleFOC DEF_CURRENT_LIM=2.0f)
 #define MOTOR0_ACCELERATION   10.0f    // Max rad/s² (optional soft-start)
 

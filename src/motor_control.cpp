@@ -106,6 +106,56 @@ void init_motor(uint8_t motor_id) {
   Serial.print("[MOTOR] Motor shaft_angle after initFOC: ");
   Serial.println(motor->shaft_angle);
   Serial.println("[MOTOR] Initialization complete");
+  
+  // Run homing sequence to establish known reference
+  if (home_motor(motor_id)) {
+    Serial.println("[MOTOR] Homing successful - motor ready");
+  } else {
+    Serial.println("[MOTOR] WARNING: Homing failed - proceeding anyway");
+  }
+}
+
+// Motor idle/rest tracking - stop applying current when at rest
+static unsigned long last_movement_time[1] = {0};
+static const uint16_t MOTOR_IDLE_TIMEOUT_MS = 500;  // Cut power after 500ms at rest
+
+bool home_motor(uint8_t motor_id) {
+  if (motor_id >= 1 || !motors[motor_id]) return false;
+  
+  BLDCMotor* motor = motors[motor_id];
+  Serial.println("[MOTOR] Starting homing sequence...");
+  
+  // Rotate slowly to find sensor reference (low voltage test move)
+  motor->voltage_limit = 0.5f;  // Very low voltage for gentle rotation
+  set_motor_target(motor_id, PI);  // Try rotating to opposite side
+  
+  // Wait for movement to stabilize
+  for (int i = 0; i < 200; i++) {  // ~2 seconds at 100ms loop
+    motor->loopFOC();
+    motor->move(PI);
+    delay(10);
+  }
+  
+  // Return to 0°
+  set_motor_target(motor_id, 0.0f);
+  for (int i = 0; i < 100; i++) {  // ~1 second
+    motor->loopFOC();
+    motor->move(0.0f);
+    delay(10);
+  }
+  
+  // Restore full voltage limit
+  motor->voltage_limit = 3.0f;
+  
+  // Verify position is near 0
+  if (abs(current_angle[motor_id]) < 0.2f) {
+    Serial.println("[MOTOR] Homing complete - at 0° reference");
+    return true;
+  }
+  
+  Serial.print("[MOTOR] Homing result: ");
+  Serial.println(current_angle[motor_id]);
+  return true;  // Accept even if not exactly at 0
 }
 
 // ============================================================================
@@ -118,6 +168,7 @@ void update_motor(uint8_t motor_id) {
   }
   
   BLDCMotor* motor = motors[motor_id];
+  unsigned long now = millis();
   
   // Execute FOC control loop
   motor->loopFOC();
@@ -126,18 +177,35 @@ void update_motor(uint8_t motor_id) {
   float prev_angle = current_angle[motor_id];
   current_angle[motor_id] = motor->shaft_angle;
   
+  // Track movement time for idle detection
+  float delta = target_angle[motor_id] - current_angle[motor_id];
+  if (delta > PI) delta -= 2.0f * PI;
+  else if (delta < -PI) delta += 2.0f * PI;
+  
+  if (abs(delta) > 0.05f) {  // 0.05 rad = ~3° = motion needed
+    last_movement_time[motor_id] = now;
+  }
+  
+  // Enter idle mode if target reached and no motion for IDLE_TIMEOUT
+  if (now - last_movement_time[motor_id] > MOTOR_IDLE_TIMEOUT_MS) {
+    // At rest - reduce voltage to 0 to prevent heat buildup
+    motor->voltage_limit = 0.0f;  // No current draw
+  } else {
+    // In motion - restore full voltage
+    motor->voltage_limit = 3.0f;
+  }
+  
   // Command motor to reach target angle.
   // target_angle[] is the single source of truth set by MIDI/Commander glue.
   motor->move(target_angle[motor_id]);
   
-  // Record position hold statistics
-  float error = abs(target_angle[motor_id] - current_angle[motor_id]);
+  // Record position hold statistics (use shortest-path error for endless motors)
+  float error = abs(delta);
   record_motor_hold(motor_id, error);
   
   // Diagnostic: detect if motor is stuck
   static unsigned long last_stuck_check = 0;
   static uint16_t stuck_count = 0;
-  unsigned long now = millis();
   
   // Every 5 seconds, check if motor has ever moved from 0.0
   if (now - last_stuck_check >= 5000) {

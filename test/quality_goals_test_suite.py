@@ -260,6 +260,7 @@ class QualityGoalsTestSuite:
         
         Expected debug output format: A=X.XX T=Y.YY
         Returns early if min_samples collected and position stable
+        Raises exception if NO SAMPLES received (fail-early)
         """
         samples = []
         start_time = time.time()
@@ -292,6 +293,10 @@ class QualityGoalsTestSuite:
                                     return samples
             
             time.sleep(0.01)
+        
+        # FAIL-EARLY: If no samples collected, something is seriously wrong
+        if not samples:
+            raise RuntimeError(f"NO SAMPLES received during {duration_sec}s window - motor communication failure")
         
         return samples
     

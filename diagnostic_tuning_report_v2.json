@@ -1,0 +1,129 @@
+{
+  "timestamp": "2026-02-28T10:46:48.937620",
+  "device": "/dev/ttyACM0",
+  "pid_config": {
+    "angle_P": 0.09,
+    "angle_I": 0.04,
+    "velocity_P": 0.0,
+    "velocity_I": 0.09,
+    "voltage_limit": 0.0,
+    "current_limit": 0.03
+  },
+  "limits": {
+    "min_angle_deg": 2.291831180523293,
+    "max_angle_deg": 5.156620156177409
+  },
+  "statistics": {},
+  "settling_analyses": [
+    {
+      "target_deg": 0,
+      "final_error_deg": 4.1252961249419275,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 5.729577951308233,
+      "undershoot_deg": 7.448451336700702,
+      "oscillation_detected": true,
+      "rms_error": 4.590818746920357,
+      "trace_length": 30
+    },
+    {
+      "target_deg": 45,
+      "final_error_deg": 3.724225668350352,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 6.566201561774093,
+      "undershoot_deg": 48.43774677078494,
+      "oscillation_detected": true,
+      "rms_error": 18.905874743563825,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 90,
+      "final_error_deg": 3.742476134134651,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 5.683951786847473,
+      "undershoot_deg": 51.61182772623484,
+      "oscillation_detected": true,
+      "rms_error": 19.77552545607249,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 135,
+      "final_error_deg": 3.323155211758774,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 4.801702011920867,
+      "undershoot_deg": 51.348161910899805,
+      "oscillation_detected": true,
+      "rms_error": 18.890184842698847,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 180,
+      "final_error_deg": 3.22681411851691,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 6.2112834175175635,
+      "undershoot_deg": 50.511538300433955,
+      "oscillation_detected": true,
+      "rms_error": 20.11427568836424,
+      "trace_length": 35
+    },
+    {
+      "target_deg": 225,
+      "final_error_deg": 4.239887683968092,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 7.047907027983399,
+      "undershoot_deg": 50.247872485098924,
+      "oscillation_detected": true,
+      "rms_error": 20.09618205123292,
+      "trace_length": 33
+    },
+    {
+      "target_deg": 270,
+      "final_error_deg": 4.097920426265477,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 6.165657253056793,
+      "undershoot_deg": 52.276037850287196,
+      "oscillation_detected": true,
+      "rms_error": 22.09381342984936,
+      "trace_length": 36
+    },
+    {
+      "target_deg": 315,
+      "final_error_deg": 4.010704565915768,
+      "settled": false,
+      "settle_time_ms": null,
+      "overshoot_deg": 7.002280863522685,
+      "undershoot_deg": 50.86645644469047,
+      "oscillation_detected": true,
+      "rms_error": 21.280642795433167,
+      "trace_length": 36
+    }
+  ],
+  "recommendations": [
+    "\u2757 HIGH STEADY-STATE ERROR (avg 3.81\u00b0)",
+    "   \u2192 Increase angle_P (currently 0.1, try 0.1)",
+    "   \u2192 OR increase angle_I (currently 0.0, try 0.1-0.5)",
+    "   \u2192 Check sensor alignment and mechanical friction",
+    "\u2757 HIGH OVERSHOOT (avg 6.15\u00b0)",
+    "   \u2192 Reduce angle_P (currently 0.1, try 0.1)",
+    "   \u2192 Increase angle_D (currently 0.5, try 1.0)",
+    "\u2757 OSCILLATION DETECTED",
+    "   \u2192 Reduce angle_P (currently 0.1, try 0.1)",
+    "   \u2192 Increase angle_D (currently 0.5, try 0.8)",
+    "   \u2192 Check low-pass filter (currently 0.005s, try 0.010s for more damping)",
+    "\u26a0\ufe0f  LOW VOLTAGE LIMIT (0.0V)",
+    "   \u2192 Consider increasing if motor performance is sluggish",
+    "   \u2192 Check motor specs for safe operating voltage"
+  ],
+  "summary": {
+    "avg_final_error_deg": 3.811309991731494,
+    "avg_overshoot_deg": 6.151070234241388,
+    "settled_count": 0,
+    "total_tests": 8
+  }
+}

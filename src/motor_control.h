@@ -40,10 +40,22 @@ extern uint8_t active_motor;
 // ============================================================================
 
 /**
- * Initialize motor hardware and FOC
+ * Initialize motor hardware and FOC with homing sequence
+ * Performs:
+ * - Driver and sensor initialization
+ * - FOC alignment and calibration
+ * - Homing routine to establish known reference position
  * @param motor_id Motor index (0 or 1)
  */
 void init_motor(uint8_t motor_id);
+
+/**
+ * Run motor homing sequence to find 0° reference position
+ * Rotates motor slowly to find sensor null/reference point
+ * @param motor_id Motor index
+ * @return true if homing successful
+ */
+bool home_motor(uint8_t motor_id);
 
 /**
  * Execute FOC control loop for motor
