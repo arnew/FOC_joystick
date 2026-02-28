@@ -3,13 +3,30 @@
 This is a usb HID joystick that accepts MIDI commands to control SimpleFOC driven motors (USB Composite Device).
 
 **Preconfigured aircraft profiles:**
-- **Airbus A320** — Throttle, Flaps, Spoilers, Landing Gear, Trim (all MIDI-configurable)
-- **Cessna 172** — Throttle, Flaps, Landing Gear, Trim (all MIDI-configurable)
-- **Glider** — Spoilers/Airbrakes, Trim (all MIDI-configurable)
+- Cessna 
+    - Throttle (0-100), 
+    - Flaps (detents for 0,10,20,30,40), 
+    - Gear (strong detent at 0, light/strong switchable detent at 100 ), 
+    - Trim (-100 to 100 with clicks)
+- Airbus 
+    - Throttle (Detents for TO/GA, FLX, CLB, Idle, Rev Idle, Reverse Full; Idle->CLB and RecIdle->RevFull are continuous flat spots in the detent profile for proportional control), 
+    - Flaps (0,1,2,3,Full), 
+    - Spoilers (detents for 0,1/2,Full, in between small clicks), 
+    - Gear (like above), 
+    - Trim (like above)
+- Glider 
+    - Spoiler (like above), 
+    - Trim (like above)
 
 See [AIRCRAFT_PROFILES.md](AIRCRAFT_PROFILES.md) for detailed MIDI CC mappings and profile switching instructions.
 
 The joystick sends position data as USB HID output to Microsoft Flight Simulator. With the single-motor hardware, one axis is controlled at a time (typically trim or one aircraft control). Select profiles by editing [src/config.h](src/config.h) before building.
+
+There is a companion app/script that closes the loop from MSFS to the joystick, keeping set values in sync between screen and joystick. 
+There is a config/calibration app/script that selects the profile, allows configurung endstops, and aids parameterising the motor control.
+
+**Operation Modes**
+Profiles are selected during compile time, or set via midi command. Joystick is able to operate in profile with preconfigured notches without companion app.
 
 **Hardware Configurations**:
 Three buildable configurations support different hardware setups:
