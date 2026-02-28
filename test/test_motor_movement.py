@@ -93,8 +93,8 @@ def test_motor_movement():
         
         # Step 2: Set target to 3.14 radians (180°)
         log("Step 2: Command motor to 3.14 rad (180°)")
-        log("  Sending: M0 T3.14")
-        response = send_command(ser, "M0 T3.14")
+        log("  Sending: T3.14 (direct command)")
+        response = send_command(ser, "T3.14")
         for line in response:
             log(f"  Response: {line}")
         
