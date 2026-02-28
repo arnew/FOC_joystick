@@ -24,13 +24,15 @@ Commander commander = Commander(Serial, '\n', ' ');
 // Custom command: Set target directly (bypasses SimpleFOC motor.target)
 // Format: T3.14
 static void cmd_set_target(char* cmd) {
-  // Parse: T<angle>
-  if (cmd[0] != 'T' && cmd[0] != 't') {
-    Serial.println("[CMD] Error: Expected T command");
+  // Commander passes payload after command letter, so cmd is like "3.14"
+  // (it may be empty when query/help is used)
+  if (!cmd || !cmd[0]) {
+    Serial.print("[CMD] T target=");
+    Serial.println(get_motor_target(0));
     return;
   }
-  
-  float angle = atof(&cmd[1]);
+
+  float angle = atof(cmd);
   set_motor_target(0, angle);
   
   Serial.print("[CMD] Set target_angle[0] = ");
