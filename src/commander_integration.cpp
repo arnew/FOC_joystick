@@ -77,11 +77,11 @@ void init_commander() {
   // - L: voltage limit
   // - C: motion test
   // - ?: status
-  commander.motor(&motor0, "M0");
+  commander.motor(&motor0, (const char*)"M0");
   
   // Register custom commands
-  commander.add('T', cmd_set_target, "set target directly");
-  commander.add('A', cmd_switch_profile, "aircraft profile (0=A320, 1=Cessna, 2=Glider)");
+  commander.add('T', cmd_set_target, (const char*)"set target directly");
+  commander.add('A', cmd_switch_profile, (const char*)"aircraft profile (0=A320, 1=Cessna, 2=Glider)");
   
   Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
   Serial.println("[COMMANDER] Commands available:");
