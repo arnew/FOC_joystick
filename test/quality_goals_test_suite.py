@@ -2,12 +2,27 @@
 """
 Quality Goals Test Suite - Verifies README.md Quality Goals
 
-Tests:
-  A - Resolution & Sample Accuracy (±1°)
-  B - Speed / RPM Measurement (≥60 rpm)
-  C - Position Hold Stability (<1° noise)
-  D - Movement Overshoot (<5°)
-  
+Architecture:
+  Tests A-D share ONE physical observation run through positions.
+  observe_positions() → List[PositionObservation] → analyze_a/b/c/d.
+  Tests E-H are standalone sequence tests.
+
+Tests (analyses on shared observation):
+  A - Resolution & Sample Accuracy (mean error at hold)
+  B - Speed (time from command to settle)
+  C - Position Hold Stability (mean + stddev at hold)
+  D - Movement Overshoot (peak deviation during trajectory)
+
+Tests (standalone sequences):
+  E - Tame Sequence (long holds)
+  F - Fast Sequence (rapid transitions)
+  G - Random Walk
+  H - Regression Sequence
+
+Load modes (--load loaded|unloaded):
+  loaded   - product acceptance limits from README quality goals
+  unloaded - relaxed limits for development without mechanical load
+
 Test Sequences (1..N):
   1 - Cardinal Positions: 0°, 90°, 180°, 270°
   2 - Full Grid: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
@@ -64,6 +79,27 @@ SEQUENCES = {
     },
 }
 
+# ---------- acceptance limits per load condition ----------
+LIMITS_LOADED = {
+    "name": "loaded",
+    "settle_tolerance": 2.0,    # ±2° to consider "reached" (3 consecutive)
+    "accuracy_mean": 1.0,       # Test A: ±1° mean error
+    "hold_mean": 1.0,           # Test C: ±1° mean at hold
+    "hold_stddev": 1.0,         # Test C: <1° noise
+    "overshoot": 5.0,           # Test D: <5° overshoot
+    "speed_per_move": 1.0,      # Test B: <1s per movement
+}
+
+LIMITS_UNLOADED = {
+    "name": "unloaded",
+    "settle_tolerance": 5.0,    # ±5° (used by observe settle + speed test)
+    "accuracy_mean": 10.0,      # ±10° (2V limit cycle at 180° = ~8°; other pos <5°)
+    "hold_mean": 10.0,           # ±10° mean at hold (matches accuracy)
+    "hold_stddev": 5.0,          # <5° noise (undamped oscillation)
+    "overshoot": 20.0,           # <20° (2V braking limited, 90→180 worst case)
+    "speed_per_move": 5.0,       # settling takes longer without friction
+}
+
 
 @dataclass
 class Sample:
@@ -86,6 +122,33 @@ class Sample:
 
 
 @dataclass
+class WaitResult:
+    """Observations from _wait_for_position"""
+    reached: bool
+    target_deg: float
+    last_actual_deg: Optional[float]   # None = no telemetry received at all
+    last_error_deg: Optional[float]
+    best_error_deg: Optional[float]
+    telemetry_lines: int               # 0 means serial was dead
+    elapsed_sec: float
+    tolerance_deg: float
+
+
+@dataclass
+class PositionObservation:
+    """All telemetry collected for one position command.
+
+    Produced by observe_positions(); consumed by analyze_a/b/c/d.
+    """
+    start_deg: float                   # where we were before the command
+    target_deg: float                  # commanded target
+    command_time: float                # time.time() when command was sent
+    trajectory: List[Sample]           # rapid samples during movement
+    wait: WaitResult                   # settle outcome
+    settled_samples: List[Sample]      # samples collected after settling
+
+
+@dataclass
 class TestResult:
     """Result of a single test"""
     test_id: str
@@ -99,39 +162,49 @@ class TestResult:
 class QualityGoalsTestSuite:
     """Complete quality goals verification suite"""
     
-    def __init__(self, port: str = '/dev/ttyACM0', verbose: bool = True):
+    def __init__(self, port: str = '/dev/ttyACM0', verbose: bool = True,
+                 load: str = 'unloaded'):
         """Initialize test suite
         
         Args:
             port: Serial port device
             verbose: Print debug output
+            load: 'loaded' or 'unloaded' — selects acceptance limits
         """
         self.port = port
         self.verbose = verbose
         self.ser = None
         self.results: List[TestResult] = []
         self.log_lines: List[str] = []
+        self.limits = LIMITS_LOADED if load == 'loaded' else LIMITS_UNLOADED
         
-    def connect(self) -> bool:
-        """Connect to device"""
+    def connect(self, ready_timeout: float = 10.0) -> bool:
+        """Connect to device and wait until telemetry is flowing.
+
+        Waits up to *ready_timeout* seconds for the first ``A=… T=…``
+        telemetry line, which proves the motor loop is running.
+        """
         try:
             self.ser = serial.Serial(self.port, 115200, timeout=2.0)
-            time.sleep(0.5)
+            time.sleep(0.3)
             self._log(f"✓ Connected to {self.port}")
-            
-            # Verify device is responsive
-            self.ser.write(b'M0?\n')
-            time.sleep(0.5)
-            response = self.ser.read_all().decode('utf-8', errors='ignore')
-            if 'M0' in response or 'Motor' in response:
-                self._log("✓ Device responsive")
-                return True
-            else:
-                self._log("✗ No response from device")
-                return False
         except Exception as e:
             self._log(f"✗ Connection failed: {e}")
             return False
+
+        # Wait for live telemetry (proves motor + serial are up)
+        self._log(f"  Waiting for telemetry (up to {ready_timeout:.0f}s)…")
+        deadline = time.time() + ready_timeout
+        while time.time() < deadline:
+            if self.ser.in_waiting:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                if re.search(r'A=[\-\d.]+\s+T=[\-\d.]+', line):
+                    self._log(f"✓ Device live: {line}")
+                    return True
+            time.sleep(0.05)
+
+        self._log("✗ No telemetry received – device not monitoring")
+        return False
     
     def _log(self, msg: str, newline: bool = True):
         """Log message"""
@@ -224,36 +297,417 @@ class QualityGoalsTestSuite:
             self._log(f"Warning: Statistics query failed: {e}")
             return None
     
-    def _wait_for_position(self, target_deg: float, timeout_sec: float = 3.0, tolerance_deg: float = 2.0) -> bool:
-        """Wait for motor to reach target position within tolerance
-        
-        Returns True if position reached, False on timeout
+    def _wait_for_position(self, target_deg: float, timeout_sec: float = 3.0, tolerance_deg: float = 2.0) -> WaitResult:
+        """Wait for motor to reach target position within tolerance.
+
+        Returns a WaitResult with full observations so callers can
+        always print target, actual, error, and criteria.
         """
         start_time = time.time()
         consecutive_good = 0
         required_consecutive = 3
-        
+        last_actual_deg: Optional[float] = None
+        last_error_deg: Optional[float] = None
+        best_error_deg: Optional[float] = None
+        telemetry_lines = 0
+
         while time.time() - start_time < timeout_sec:
-            # Read current position
             if self.ser.in_waiting:
                 line = self.ser.readline().decode('utf-8', errors='ignore').strip()
                 match = re.search(r'A=([\-\d.]+)\s+T=([\-\d.]+)', line)
                 if match:
+                    telemetry_lines += 1
                     actual_rad = float(match.group(1))
                     actual_deg = math.degrees(actual_rad)
                     error = abs(actual_deg - target_deg)
-                    
+
+                    last_actual_deg = actual_deg
+                    last_error_deg = error
+                    if best_error_deg is None or error < best_error_deg:
+                        best_error_deg = error
+
                     if error <= tolerance_deg:
                         consecutive_good += 1
                         if consecutive_good >= required_consecutive:
-                            return True
+                            return WaitResult(
+                                reached=True, target_deg=target_deg,
+                                last_actual_deg=actual_deg, last_error_deg=error,
+                                best_error_deg=best_error_deg,
+                                telemetry_lines=telemetry_lines,
+                                elapsed_sec=time.time() - start_time,
+                                tolerance_deg=tolerance_deg)
                     else:
                         consecutive_good = 0
-            
             time.sleep(0.05)
-        
-        return False
-    
+
+        return WaitResult(
+            reached=False, target_deg=target_deg,
+            last_actual_deg=last_actual_deg, last_error_deg=last_error_deg,
+            best_error_deg=best_error_deg,
+            telemetry_lines=telemetry_lines,
+            elapsed_sec=time.time() - start_time,
+            tolerance_deg=tolerance_deg)
+
+    def _log_wait_result(self, w: WaitResult, label: str = ""):
+        """Print observations from a WaitResult (show-your-work)."""
+        prefix = f"{label}: " if label else ""
+        if w.last_actual_deg is None:
+            self._log(f"  {prefix}target={w.target_deg:.1f}°  actual=NO TELEMETRY "
+                      f"({w.telemetry_lines} lines in {w.elapsed_sec:.1f}s)")
+        else:
+            status = "✓ reached" if w.reached else "✗ timeout"
+            self._log(f"  {prefix}target={w.target_deg:.1f}°  actual={w.last_actual_deg:.1f}°  "
+                      f"error={w.last_error_deg:.1f}°  best={w.best_error_deg:.1f}°  "
+                      f"tolerance=±{w.tolerance_deg:.0f}°  "
+                      f"({w.telemetry_lines} lines, {w.elapsed_sec:.1f}s) → {status}")
+
+    # ------------------------------------------------------------------
+    # Observation helpers (observe once, analyse many)
+    # ------------------------------------------------------------------
+
+    def _read_current_position(self) -> Optional[float]:
+        """Read one telemetry line and return actual degrees (or None)."""
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if self.ser.in_waiting:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                m = re.search(r'A=([\-\d.]+)', line)
+                if m:
+                    return math.degrees(float(m.group(1)))
+            time.sleep(0.05)
+        return None
+
+    def _observe_settle(self, target_deg: float, timeout_sec: float = 5.0,
+                        tolerance_deg: float = 2.0) -> Tuple[List[Sample], WaitResult]:
+        """Wait for settle while recording every telemetry sample.
+
+        Returns (trajectory_samples, wait_result).
+        """
+        start_time = time.time()
+        consecutive_good = 0
+        required_consecutive = 3
+        last_actual_deg: Optional[float] = None
+        last_error_deg: Optional[float] = None
+        best_error_deg: Optional[float] = None
+        telemetry_lines = 0
+        trajectory: List[Sample] = []
+
+        while time.time() - start_time < timeout_sec:
+            if self.ser.in_waiting:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                match = re.search(r'A=([\-\d.]+)\s+T=([\-\d.]+)', line)
+                if match:
+                    telemetry_lines += 1
+                    actual_rad = float(match.group(1))
+                    target_rad = float(match.group(2))
+                    actual_deg = math.degrees(actual_rad)
+                    error = abs(actual_deg - target_deg)
+
+                    trajectory.append(Sample(
+                        timestamp=time.time() - start_time,
+                        actual_rad=actual_rad,
+                        target_rad=target_rad))
+
+                    last_actual_deg = actual_deg
+                    last_error_deg = error
+                    if best_error_deg is None or error < best_error_deg:
+                        best_error_deg = error
+
+                    if error <= tolerance_deg:
+                        consecutive_good += 1
+                        if consecutive_good >= required_consecutive:
+                            w = WaitResult(
+                                reached=True, target_deg=target_deg,
+                                last_actual_deg=actual_deg, last_error_deg=error,
+                                best_error_deg=best_error_deg,
+                                telemetry_lines=telemetry_lines,
+                                elapsed_sec=time.time() - start_time,
+                                tolerance_deg=tolerance_deg)
+                            return trajectory, w
+                    else:
+                        consecutive_good = 0
+            time.sleep(0.05)
+
+        w = WaitResult(
+            reached=False, target_deg=target_deg,
+            last_actual_deg=last_actual_deg, last_error_deg=last_error_deg,
+            best_error_deg=best_error_deg,
+            telemetry_lines=telemetry_lines,
+            elapsed_sec=time.time() - start_time,
+            tolerance_deg=tolerance_deg)
+        return trajectory, w
+
+    def _collect_hold_samples(self, duration_sec: float) -> List[Sample]:
+        """Collect all telemetry for *duration_sec* (no thinning, no early exit)."""
+        samples: List[Sample] = []
+        start = time.time()
+        while time.time() - start < duration_sec:
+            if self.ser.in_waiting:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                match = re.search(r'A=([\-\d.]+)\s+T=([\-\d.]+)', line)
+                if match:
+                    samples.append(Sample(
+                        timestamp=time.time() - start,
+                        actual_rad=float(match.group(1)),
+                        target_rad=float(match.group(2))))
+            time.sleep(0.01)
+        return samples
+
+    def observe_positions(self, positions: List[int],
+                          settle_sec: float = 5.0,
+                          hold_sec: float = 3.0) -> List[PositionObservation]:
+        """Command motor through *positions*, observe trajectory + hold.
+
+        One physical run — the returned observations feed analyse_a/b/c/d.
+        Pre-positions to the first target and waits for settle before
+        collecting data, so the first observation starts from a known state.
+        """
+        self._log("\n" + "=" * 70)
+        self._log(f"OBSERVE: {len(positions)} positions  [{self.limits['name']}]")
+        self._log("=" * 70)
+
+        observations: List[PositionObservation] = []
+        last_actual_deg = self._read_current_position() or 0.0
+
+        # Pre-position: command to first target and let it settle
+        # so the first observation doesn't include a big initial move
+        if positions:
+            first_target = positions[0]
+            self._log(f"  PRE-POSITION: → {first_target}° (from {last_actual_deg:.1f}°)")
+            self._set_target(first_target)
+            _, pre_wait = self._observe_settle(
+                first_target, timeout_sec=settle_sec,
+                tolerance_deg=self.limits["settle_tolerance"])
+            self._log_wait_result(pre_wait)
+            # extra dwell to let oscillation die down
+            self._collect_hold_samples(2.0)
+            last_actual_deg = first_target
+            self._log(f"  PRE-POSITION: done, starting data collection")
+
+        for target_deg in positions:
+            self._log(f"  → Target: {target_deg}°")
+            start_deg = last_actual_deg
+
+            command_time = time.time()
+            self._set_target(target_deg)
+
+            # Phase 1: trajectory + settle detection
+            trajectory, wait = self._observe_settle(
+                target_deg, timeout_sec=settle_sec,
+                tolerance_deg=self.limits["settle_tolerance"])
+            self._log_wait_result(wait)
+
+            # Phase 2: hold samples (always collected, even if not settled)
+            settled_samples = self._collect_hold_samples(hold_sec)
+
+            obs = PositionObservation(
+                start_deg=start_deg,
+                target_deg=target_deg,
+                command_time=command_time,
+                trajectory=trajectory,
+                wait=wait,
+                settled_samples=settled_samples)
+            observations.append(obs)
+
+            # carry forward for next iteration
+            if settled_samples:
+                last_actual_deg = settled_samples[-1].actual_deg
+            elif trajectory:
+                last_actual_deg = trajectory[-1].actual_deg
+            elif wait.last_actual_deg is not None:
+                last_actual_deg = wait.last_actual_deg
+
+        return observations
+
+    # ------------------------------------------------------------------
+    # Analyses — pure functions on observations (no motor I/O)
+    # ------------------------------------------------------------------
+
+    def analyze_a(self, observations: List[PositionObservation]) -> bool:
+        """TEST A: Resolution & Sample Accuracy — mean error at settled positions."""
+        self._log("\n" + "=" * 70)
+        self._log(f"TEST A: Resolution & Sample Accuracy  [limit: ≤{self.limits['accuracy_mean']}°]")
+        self._log("=" * 70)
+
+        criteria_met = {}
+        measurements = {}
+        limit = self.limits["accuracy_mean"]
+
+        for obs in observations:
+            t = int(obs.target_deg)
+            samples = obs.settled_samples
+            if not samples:
+                criteria_met[f"pos_{t}"] = False
+                measurements[f"pos_{t}_error"] = obs.wait.last_error_deg or 999.0
+                self._log(f"  ✗ {t}°: no hold samples")
+                continue
+
+            errors = [s.error_deg for s in samples]
+            mean_error, stddev, _, _ = self._calculate_stats(errors)
+
+            passed = mean_error <= limit
+            criteria_met[f"pos_{t}"] = passed
+            measurements[f"pos_{t}_error"] = mean_error
+
+            status = "✓" if passed else "✗"
+            self._log(f"  {status} {t}°: mean_error={mean_error:.2f}° stddev={stddev:.2f}°  "
+                      f"(limit: ≤{limit}°, {len(samples)} samples)")
+
+        all_pass = all(criteria_met.values()) if criteria_met else False
+        result = TestResult(
+            test_id="A", test_name="Resolution & Sample Accuracy",
+            passed=all_pass, criteria_met=criteria_met,
+            measurements=measurements,
+            notes=f"{len(observations)} positions [{self.limits['name']}]")
+        self.results.append(result)
+        self._log(f"\n{'✓ PASS' if all_pass else '✗ FAIL'}: TEST A")
+        return all_pass
+
+    def analyze_b(self, observations: List[PositionObservation]) -> bool:
+        """TEST B: Speed — time from command to first reach within tolerance.
+
+        Measures approach speed from trajectory data.  An unloaded motor can
+        reach the vicinity quickly even if it keeps oscillating — oscillation
+        stability is test C's job.
+        """
+        limit = self.limits["speed_per_move"]
+        tol = self.limits["settle_tolerance"]
+        self._log("\n" + "=" * 70)
+        self._log(f"TEST B: Speed Measurement  [limit: <{limit}s, ±{tol}°]")
+        self._log("=" * 70)
+
+        criteria_met = {}
+        measurements = {}
+
+        for obs in observations:
+            t = int(obs.target_deg)
+            # Find first trajectory sample within tolerance
+            first_time = None
+            for s in obs.trajectory:
+                if abs(s.actual_deg - obs.target_deg) <= tol:
+                    first_time = s.timestamp  # relative to command time
+                    break
+
+            if first_time is not None:
+                passed = first_time <= limit
+                criteria_met[f"speed_{t}"] = passed
+                measurements[f"speed_{t}_sec"] = first_time
+                status = "✓" if passed else "✗"
+                self._log(f"  {status} {t}°: first within ±{tol}° at {first_time:.2f}s  "
+                          f"(limit: <{limit}s, {len(obs.trajectory)} traj samples)")
+            else:
+                criteria_met[f"speed_{t}"] = False
+                measurements[f"speed_{t}_sec"] = obs.wait.elapsed_sec
+                best = obs.wait.best_error_deg
+                self._log(f"  ✗ {t}°: never reached ±{tol}°  "
+                          f"(best={best:.1f}°, {len(obs.trajectory)} traj samples)")
+
+        all_pass = all(criteria_met.values()) if criteria_met else False
+        result = TestResult(
+            test_id="B", test_name="Speed Measurement",
+            passed=all_pass, criteria_met=criteria_met,
+            measurements=measurements,
+            notes=f"{len(observations)} positions [{self.limits['name']}]")
+        self.results.append(result)
+        self._log(f"\n{'✓ PASS' if all_pass else '✗ FAIL'}: TEST B")
+        return all_pass
+
+    def analyze_c(self, observations: List[PositionObservation]) -> bool:
+        """TEST C: Position Hold Stability — mean + stddev at hold."""
+        mean_lim = self.limits["hold_mean"]
+        std_lim = self.limits["hold_stddev"]
+        self._log("\n" + "=" * 70)
+        self._log(f"TEST C: Position Hold Stability  [mean≤{mean_lim}°, stddev<{std_lim}°]")
+        self._log("=" * 70)
+
+        criteria_met = {}
+        measurements = {}
+
+        for obs in observations:
+            t = int(obs.target_deg)
+            samples = obs.settled_samples
+            if not samples:
+                criteria_met[f"hold_{t}"] = False
+                measurements[f"hold_{t}_error"] = obs.wait.last_error_deg or 999.0
+                self._log(f"  ✗ {t}°: no hold samples")
+                continue
+
+            errors = [s.error_deg for s in samples]
+            mean_error, stddev, _, _ = self._calculate_stats(errors)
+
+            passed = mean_error <= mean_lim and stddev < std_lim
+            criteria_met[f"hold_{t}"] = passed
+            measurements[f"hold_{t}_error"] = mean_error
+            measurements[f"hold_{t}_stddev"] = stddev
+
+            status = "✓" if passed else "✗"
+            self._log(f"  {status} {t}°: mean={mean_error:.2f}° stddev={stddev:.2f}°  "
+                      f"(limits: mean≤{mean_lim}°, stddev<{std_lim}°, {len(samples)} samples)")
+
+        all_pass = all(criteria_met.values()) if criteria_met else False
+        result = TestResult(
+            test_id="C", test_name="Position Hold Stability",
+            passed=all_pass, criteria_met=criteria_met,
+            measurements=measurements,
+            notes=f"{len(observations)} positions [{self.limits['name']}]")
+        self.results.append(result)
+        self._log(f"\n{'✓ PASS' if all_pass else '✗ FAIL'}: TEST C")
+        return all_pass
+
+    def analyze_d(self, observations: List[PositionObservation]) -> bool:
+        """TEST D: Movement Overshoot — peak deviation during trajectory."""
+        ov_lim = self.limits["overshoot"]
+        self._log("\n" + "=" * 70)
+        n_moves = max(0, len(observations) - 1)
+        self._log(f"TEST D: Movement Overshoot ({n_moves} moves)  [limit: <{ov_lim}°]")
+        self._log("=" * 70)
+
+        criteria_met = {}
+        measurements = {}
+
+        for i, obs in enumerate(observations):
+            if i == 0:
+                continue  # first position is pre-position only
+            start_deg = observations[i - 1].target_deg
+            target_deg = obs.target_deg
+            samples = obs.trajectory
+            if len(samples) < 3:
+                self._log(f"  ✗ {start_deg}°→{target_deg}°: only {len(samples)} trajectory samples")
+                criteria_met[f"move_{int(start_deg)}_to_{int(target_deg)}"] = False
+                measurements[f"move_{int(start_deg)}_to_{int(target_deg)}_overshoot"] = 999.0
+                continue
+
+            actuals = [s.actual_deg for s in samples]
+            if target_deg > start_deg:
+                overshoot = max(0, max(actuals) - target_deg)
+            else:
+                overshoot = max(0, target_deg - min(actuals))
+
+            passed = overshoot < ov_lim
+            key = f"move_{int(start_deg)}_to_{int(target_deg)}"
+            criteria_met[key] = passed
+            measurements[f"{key}_overshoot"] = overshoot
+
+            final = actuals[-1]
+            status = "✓" if passed else "✗"
+            self._log(f"  {status} {int(start_deg)}°→{int(target_deg)}°: "
+                      f"overshoot={overshoot:.1f}° final={final:.1f}°  "
+                      f"(limit: <{ov_lim}°, {len(samples)} samples)")
+
+        all_pass = all(criteria_met.values()) if criteria_met else False
+        result = TestResult(
+            test_id="D", test_name="Movement Overshoot",
+            passed=all_pass, criteria_met=criteria_met,
+            measurements=measurements,
+            notes=f"{n_moves} movements [{self.limits['name']}]")
+        self.results.append(result)
+        self._log(f"\n{'✓ PASS' if all_pass else '✗ FAIL'}: TEST D")
+        return all_pass
+
+    # ------------------------------------------------------------------
+    # Legacy per-test methods kept for E-H (standalone sequence tests)
+    # ------------------------------------------------------------------
+
     def _read_samples(self, duration_sec: float, interval_sec: float = 1.0, min_samples: int = 3) -> List[Sample]:
         """Read position samples for specified duration (with early exit)
         
@@ -313,260 +767,6 @@ class QualityGoalsTestSuite:
         
         return mean, stddev, min(values), max(values)
     
-    def test_a_resolution(self, positions: List[int]) -> bool:
-        """TEST A: Resolution & Sample Accuracy
-        
-        Verify ±1° accuracy at multiple positions
-        """
-        self._log("\n" + "="*70)
-        self._log(f"TEST A: Resolution & Sample Accuracy ({len(positions)} positions)")
-        self._log("="*70)
-        
-        criteria_met = {}
-        measurements = {}
-        
-        for target_deg in positions:
-            self._log(f"Target: {target_deg}°...", newline=False)
-            self._set_target(target_deg)
-            
-            # Wait for position with timeout
-            reached = self._wait_for_position(target_deg, timeout_sec=2.0, tolerance_deg=2.0)
-            
-            if not reached:
-                self._log(f" ✗ Timeout (never reached)")
-                criteria_met[f"pos_{target_deg}"] = False
-                measurements[f"pos_{target_deg}_error"] = 999.0
-                continue
-            
-            # Collect quick samples (3 samples over 1.5s)
-            samples = self._read_samples(duration_sec=1.5, interval_sec=0.5, min_samples=3)
-            
-            if samples and len(samples) >= 3:
-                errors = [s.error_deg for s in samples]
-                mean_error, stddev, _, _ = self._calculate_stats(errors)
-                
-                passed = mean_error <= 1.0
-                criteria_met[f"pos_{target_deg}"] = passed
-                measurements[f"pos_{target_deg}_error"] = mean_error
-                
-                status = "✓" if passed else "✗"
-                self._log(f" {status} {mean_error:.2f}°")
-            else:
-                self._log(f" ✗ Insufficient samples")
-                criteria_met[f"pos_{target_deg}"] = False
-                measurements[f"pos_{target_deg}_error"] = 999.0
-        
-        passed = all(criteria_met.values())
-        result = TestResult(
-            test_id="A",
-            test_name="Resolution & Sample Accuracy",
-            passed=passed,
-            criteria_met=criteria_met,
-            measurements=measurements,
-            notes=f"Tested {len(positions)} positions"
-        )
-        self.results.append(result)
-        
-        self._log(f"\n{'✓ PASS' if passed else '✗ FAIL'}: TEST A")
-        return passed
-    
-    def test_b_speed(self, positions: List[int]) -> bool:
-        """TEST B: Speed / RPM Measurement
-        
-        Verify ≥60 rpm by measuring time to move between positions
-        Now tests on provided sequence instead of full 360° sweep
-        """
-        self._log("\n" + "="*70)
-        self._log(f"TEST B: Speed Measurement ({len(positions)} positions)")
-        self._log("="*70)
-        
-        criteria_met = {}
-        measurements = {}
-        
-        # Reset statistics to track movements
-        self.ser.write(b'S0\n')
-        time.sleep(0.3)
-        
-        # Test movements in sequence
-        move_times = []
-        start_time = time.time()
-        
-        for i, target_deg in enumerate(positions):
-            self._set_target(target_deg)
-            # Quick wait (don't need perfect settling for speed test)
-            time.sleep(0.3)
-        
-        total_time = time.time() - start_time
-        
-        # Query statistics to get movement count
-        stats = self._query_statistics()
-        if stats and 'motor_movements' in stats:
-            movements = stats['motor_movements']
-            avg_time_per_move = total_time / movements if movements > 0 else 999.0
-            
-            # Speed criteria: should complete moves quickly
-            # For 60 rpm = 6°/sec, moving 90° takes 15 seconds
-            # We expect much faster for position control
-            passed = avg_time_per_move < 1.0  # <1 sec per movement
-            
-            criteria_met["avg_speed"] = passed
-            measurements["total_time"] = total_time
-            measurements["movements"] = movements
-            measurements["avg_time_per_move"] = avg_time_per_move
-            
-            self._log(f"{movements} movements in {total_time:.2f}s = {avg_time_per_move:.3f}s/move")
-            self._log(f"{'✓ PASS' if passed else '✗ FAIL'}: {'Fast enough' if passed else 'Too slow'}")
-        else:
-            self._log("✗ Failed to query statistics")
-            criteria_met["avg_speed"] = False
-            measurements["total_time"] = total_time
-        
-        passed = all(criteria_met.values())
-        result = TestResult(
-            test_id="B",
-            test_name="Speed Measurement",
-            passed=passed,
-            criteria_met=criteria_met,
-            measurements=measurements,
-            notes=f"Tested {len(positions)} position sequence"
-        )
-        self.results.append(result)
-        
-        self._log(f"\n{'✓ PASS' if passed else '✗ FAIL'}: TEST B")
-        return passed
-    
-    def test_c_position_hold(self, positions: List[int]) -> bool:
-        """TEST C: Position Hold Stability
-        
-        Verify ±1° accuracy and <1° variance using on-device statistics
-        """
-        self._log("\n" + "="*70)
-        self._log(f"TEST C: Position Hold Stability ({len(positions)} positions)")
-        self._log("="*70)
-        
-        criteria_met = {}
-        measurements = {}
-        
-        for target_deg in positions:
-            self._log(f"Hold {target_deg}°...", newline=False)
-            self._set_target(target_deg)
-            
-            # Wait for settling with timeout
-            reached = self._wait_for_position(target_deg, timeout_sec=2.0, tolerance_deg=2.0)
-            
-            if not reached:
-                self._log(f" ✗ Timeout")
-                criteria_met[f"hold_{target_deg}"] = False
-                measurements[f"hold_{target_deg}_error"] = 999.0
-                continue
-            
-            # Collect quick samples for stability check (3 samples over 1.5s)
-            samples = self._read_samples(duration_sec=1.5, interval_sec=0.5, min_samples=3)
-            
-            if samples and len(samples) >= 3:
-                errors = [s.error_deg for s in samples]
-                mean_error, stddev, _, _ = self._calculate_stats(errors)
-                
-                # Criteria: mean ≤1°, variance <1°
-                passed = mean_error <= 1.0 and stddev < 1.0
-                
-                criteria_met[f"hold_{target_deg}"] = passed
-                measurements[f"hold_{target_deg}_error"] = mean_error
-                measurements[f"hold_{target_deg}_stddev"] = stddev
-                
-                status = "✓" if passed else "✗"
-                self._log(f" {status} {mean_error:.2f}° ± {stddev:.2f}°")
-            else:
-                self._log(f" ✗ No samples")
-                criteria_met[f"hold_{target_deg}"] = False
-                measurements[f"hold_{target_deg}_error"] = 999.0
-        
-        passed = all(criteria_met.values())
-        result = TestResult(
-            test_id="C",
-            test_name="Position Hold Stability",
-            passed=passed,
-            criteria_met=criteria_met,
-            measurements=measurements,
-            notes=f"Tested {len(positions)} positions"
-        )
-        self.results.append(result)
-        
-        self._log(f"\n{'✓ PASS' if passed else '✗ FAIL'}: TEST C")
-        return passed
-    
-    def test_d_overshoot(self, positions: List[int]) -> bool:
-        """TEST D: Movement Overshoot
-        
-        Verify <5° overshoot during target changes
-        Tests consecutive movements in position sequence
-        """
-        self._log("\n" + "="*70)
-        self._log(f"TEST D: Movement Overshoot ({len(positions)-1} movements)")
-        self._log("="*70)
-        
-        criteria_met = {}
-        measurements = {}
-        
-        if len(positions) < 2:
-            self._log("✗ Need at least 2 positions for overshoot test")
-            return False
-        
-        # Start at first position
-        self._set_target(positions[0])
-        self._wait_for_position(positions[0], timeout_sec=2.0)
-        
-        # Test movements between consecutive positions
-        for i in range(len(positions) - 1):
-            start_deg = positions[i]
-            target_deg = positions[i + 1]
-            
-            self._log(f"Move {start_deg}° → {target_deg}°...", newline=False)
-            
-            # Move to target and track trajectory
-            self._set_target(target_deg)
-            
-            # Collect rapid samples during movement (shorter timeout)
-            samples = self._read_samples(duration_sec=2.0, interval_sec=0.05, min_samples=5)
-            
-            if samples and len(samples) >= 5:
-                angles = [s.actual_deg for s in samples]
-                actual_deg_values = [s.actual_deg for s in samples]
-                
-                # Calculate overshoot based on direction
-                if target_deg > start_deg:
-                    max_angle = max(actual_deg_values)
-                    overshoot = max(0, max_angle - target_deg)
-                else:
-                    min_angle = min(actual_deg_values)
-                    overshoot = max(0, start_deg - min_angle)
-                
-                passed = overshoot < 5.0
-                criteria_met[f"move_{i}_{start_deg}_to_{target_deg}"] = passed
-                measurements[f"move_{i}_overshoot"] = overshoot
-                
-                status = "✓" if passed else "✗"
-                self._log(f" {status} {overshoot:.1f}°")
-            else:
-                self._log(f" ✗ No samples")
-                criteria_met[f"move_{i}_{start_deg}_to_{target_deg}"] = False
-                measurements[f"move_{i}_overshoot"] = 999.0
-        
-        passed = all(criteria_met.values())
-        num_movements = len(positions) - 1
-        result = TestResult(
-            test_id="D",
-            test_name="Movement Overshoot",
-            passed=passed,
-            criteria_met=criteria_met,
-            measurements=measurements,
-            notes=f"Tested {num_movements} movements"
-        )
-        self.results.append(result)
-        
-        self._log(f"\n{'✓ PASS' if passed else '✗ FAIL'}: TEST D")
-        return passed
-    
     def test_e_sequence_tame(self) -> bool:
         """TEST E: Tame Sequence - Slow, Stable Positions with Long Holds
         
@@ -583,48 +783,56 @@ class QualityGoalsTestSuite:
         criteria_met = {}
         measurements = {}
         
-        self._log(f"\nTesting {len(tame_positions)} positions with 8-second holds each...")
-        
+        self._log(f"\nTesting {len(tame_positions)} positions (settle ≤1s, hold 3s)...")
+
         for target_deg in tame_positions:
-            self._log(f"\nTame position: {target_deg}°...")
+            self._log(f"  → Tame position: {target_deg}°")
             self._set_target(target_deg)
-            
-            # Wait for settling
-            time.sleep(3.0)
-            
-            # Collect samples for 8 seconds (long hold)
-            samples = self._read_samples(duration_sec=8.0, interval_sec=1.0)
-            
-            if samples and len(samples) >= 5:
+
+            # Wait for settling (≤1s expected)
+            w = self._wait_for_position(target_deg, timeout_sec=5.0, tolerance_deg=2.0)
+            self._log_wait_result(w, "settle")
+
+            if not w.reached:
+                criteria_met[f"tame_{target_deg}_mean"] = False
+                criteria_met[f"tame_{target_deg}_variance"] = False
+                measurements[f"tame_{target_deg}_mean_error"] = w.last_error_deg if w.last_error_deg is not None else 999.0
+                continue
+
+            # Collect samples for 3 seconds hold
+            samples = self._read_samples(duration_sec=3.0, interval_sec=0.5, min_samples=4)
+
+            if samples and len(samples) >= 3:
                 errors = [s.error_deg for s in samples]
                 mean_error, stddev, min_err, max_err = self._calculate_stats(errors)
-                
-                # Tame criteria: mean ≤1°, variance <0.5° (strict for long hold)
+
+                # Tame criteria: mean ≤1°, stddev <0.5°
                 passed_mean = mean_error <= 1.0
                 passed_var = stddev < 0.5
                 passed = passed_mean and passed_var
-                
+
                 criteria_met[f"tame_{target_deg}_mean"] = passed_mean
                 criteria_met[f"tame_{target_deg}_variance"] = passed_var
                 measurements[f"tame_{target_deg}_mean_error"] = mean_error
                 measurements[f"tame_{target_deg}_stddev"] = stddev
-                
+
                 status = "✓" if passed else "✗"
-                self._log(f"{status} Tame {target_deg}°: {mean_error:.3f}° ± {stddev:.3f}° (8s hold)")
+                self._log(f"  {status} mean={mean_error:.3f}° stddev={stddev:.3f}° "
+                          f"(criteria: mean≤1°, stddev<0.5°)")
             else:
-                self._log(f"✗ Tame {target_deg}°: Insufficient samples")
+                self._log(f"  ✗ Insufficient samples ({len(samples) if samples else 0})")
                 criteria_met[f"tame_{target_deg}_mean"] = False
                 criteria_met[f"tame_{target_deg}_variance"] = False
                 measurements[f"tame_{target_deg}_mean_error"] = 999.0
-        
+
         passed = all(criteria_met.values())
         result = TestResult(
             test_id="E",
-            test_name="Tame Sequence - Stable Long Holds",
+            test_name="Tame Sequence - Stable Holds",
             passed=passed,
             criteria_met=criteria_met,
             measurements=measurements,
-            notes=f"Tested {len(tame_positions)} cardinal/intercardinal positions, 8s holds"
+            notes=f"Tested {len(tame_positions)} positions, settle≤1s + 3s hold"
         )
         self.results.append(result)
         
@@ -937,94 +1145,69 @@ class QualityGoalsTestSuite:
         self._log(f"\n✓ Results exported to {filepath}")
     
     def run_sequence_matrix(self, export_json_path: Optional[str] = None) -> bool:
-        """Run tests A-D across all test sequences
-        
-        Creates a matrix: Rows=Sequences, Columns=Tests(A-D), Values=Pass/Fail
-        Uses optimized tests with timeouts and on-device statistics
+        """Run tests A-D across all test sequences.
+
+        One observation per sequence; four analyses on that data.
         """
         if not self.connect():
             return False
-        
+
         try:
-            self._log("\n" + "="*70)
-            self._log("SEQUENCE MATRIX TEST: Running Tests A-D on 6 Sequences")
-            self._log("="*70)
-            
-            # Matrix storage: sequence_id -> {test_letter -> passed}
-            matrix_results = {}
+            self._log("\n" + "=" * 70)
+            self._log(f"SEQUENCE MATRIX TEST: A-D on 6 Sequences  [{self.limits['name']}]")
+            self._log("=" * 70)
+
+            matrix_results: Dict[str, Dict[str, bool]] = {}
             start_time = time.time()
-            
+
             for seq_id, seq_config in SEQUENCES.items():
                 seq_start = time.time()
                 name = seq_config["name"]
                 positions = seq_config.get("positions", [])
-                
-                self._log(f"\n\u250c{'─'*68}\u2510")
-                self._log(f"\u2502 SEQUENCE {seq_id}: {name:54} \u2502")
-                self._log(f"\u2502 Positions: {str(positions)[:56]:56} \u2502")
-                self._log(f"\u2514{'─'*68}\u2518")
-                
-                seq_results = {}
-                
-                # Save current results count to isolate this sequence's tests
+
+                self._log(f"\n┌{'─' * 68}┐")
+                self._log(f"│ SEQUENCE {seq_id}: {name:54} │")
+                self._log(f"│ Positions: {str(positions)[:56]:56} │")
+                self._log(f"└{'─' * 68}┘")
+
+                # --- single observation run for this sequence ---
                 results_before = len(self.results)
-                
-                # TEST A: Resolution on this sequence
                 try:
-                    test_a_passed = self.test_a_resolution(positions[:6])  # Limit to 6 for time
-                    seq_results["A"] = test_a_passed
+                    obs = self.observe_positions(positions[:6])
                 except Exception as e:
-                    self._log(f"  \u2717 TEST A failed with error: {e}")
-                    seq_results["A"] = False
-                
-                # TEST B: Speed through this sequence
-                try:
-                    test_b_passed = self.test_b_speed(positions)
-                    seq_results["B"] = test_b_passed
-                except Exception as e:
-                    self._log(f"  \u2717 TEST B failed with error: {e}")
-                    seq_results["B"] = False
-                
-                # TEST C: Position Hold on first 4 positions
-                try:
-                    test_c_passed = self.test_c_position_hold(positions[:4])
-                    seq_results["C"] = test_c_passed
-                except Exception as e:
-                    self._log(f"  \u2717 TEST C failed with error: {e}")
-                    seq_results["C"] = False
-                
-                # TEST D: Overshoot through sequence
-                try:
-                    test_d_passed = self.test_d_overshoot(positions)
-                    seq_results["D"] = test_d_passed
-                except Exception as e:
-                    self._log(f"  \u2717 TEST D failed with error: {e}")
-                    seq_results["D"] = False
-                
+                    self._log(f"  ✗ Observation failed: {e}")
+                    matrix_results[seq_id] = {"A": False, "B": False,
+                                               "C": False, "D": False}
+                    continue
+
+                seq_results = {}
+                for label, fn in [("A", self.analyze_a), ("B", self.analyze_b),
+                                   ("C", self.analyze_c), ("D", self.analyze_d)]:
+                    try:
+                        seq_results[label] = fn(obs)
+                    except Exception as e:
+                        self._log(f"  ✗ TEST {label} error: {e}")
+                        seq_results[label] = False
+
                 matrix_results[seq_id] = seq_results
-                
-                # Summary for this sequence
                 score = sum(1 for v in seq_results.values() if v)
                 seq_time = time.time() - seq_start
-                self._log(f"\n  \u27a4 SEQUENCE {seq_id} SCORE: {score}/4 ({seq_time:.1f}s)\\n")
-            
+                self._log(f"\n  ➤ SEQUENCE {seq_id} SCORE: {score}/4 ({seq_time:.1f}s)")
+
             total_time = time.time() - start_time
             self._log(f"\nTotal matrix execution time: {total_time:.1f}s")
-            
-            # Print matrix summary
             self._print_sequence_matrix(matrix_results)
-            
+
             if export_json_path:
                 self._export_matrix_json(matrix_results, export_json_path)
-            
-            # Calculate overall success rate
+
             total_tests = sum(len(r) for r in matrix_results.values())
-            total_passed = sum(sum(1 for v in r.values() if v) for r in matrix_results.values())
+            total_passed = sum(sum(1 for v in r.values() if v)
+                               for r in matrix_results.values())
             success_rate = total_passed / total_tests if total_tests > 0 else 0
-            
-            self._log(f"\n\u2550\u2550 OVERALL: {total_passed}/{total_tests} tests passed ({success_rate*100:.0f}%) \u2550\u2550\\n")
-            
-            return success_rate >= 0.75  # 75% pass rate
+            self._log(f"\n══ OVERALL: {total_passed}/{total_tests} passed "
+                      f"({success_rate * 100:.0f}%) ══")
+            return success_rate >= 0.75
         finally:
             self.close()
     
@@ -1070,29 +1253,55 @@ class QualityGoalsTestSuite:
         Path(filepath).write_text(json.dumps(output, indent=2) + "\n")
         self._log(f"\n✓ Matrix results exported to {filepath}")
     
-    def run_all(self, export_json_path: Optional[str] = None) -> bool:
-        """Run all quality goal tests"""
+    def run_all(self, export_json_path: Optional[str] = None,
+                tests: Optional[List[str]] = None) -> bool:
+        """Run quality goal tests.
+
+        Tests A-D share ONE observation run; E-H are standalone sequences.
+
+        Args:
+            tests: Optional list of test IDs (e.g. ["A","C"]).
+                   None or empty means run all.
+        """
         if not self.connect():
             return False
-        
-        # Default positions for standard (non-matrix) run
-        default_positions = SEQUENCES["1_cardinal"]["positions"]
-        
+
+        valid_ids = list("ABCDEFGH")
+        selected = [t.upper() for t in tests] if tests else valid_ids
+        unknown = set(selected) - set(valid_ids)
+        if unknown:
+            self._log(f"✗ Unknown tests: {unknown}  (valid: {valid_ids})")
+            return False
+
+        self._log(f"Running tests: {', '.join(selected)}  [{self.limits['name']}]")
+
         try:
-            self.test_a_resolution(default_positions)
-            self.test_b_speed(default_positions)
-            self.test_c_position_hold(default_positions)
-            self.test_d_overshoot(default_positions)
-            self.test_e_sequence_tame()
-            self.test_f_sequence_fast()
-            self.test_g_sequence_random_walk()
-            self.test_h_sequence_regression()
-            
+            # ---- A-D: observe once, analyse many ----
+            abcd = [t for t in selected if t in "ABCD"]
+            if abcd:
+                positions = SEQUENCES["1_cardinal"]["positions"]
+                obs = self.observe_positions(positions)
+                analyses = {"A": self.analyze_a, "B": self.analyze_b,
+                            "C": self.analyze_c, "D": self.analyze_d}
+                for tid in abcd:
+                    analyses[tid](obs)
+
+            # ---- E-H: standalone sequence tests ----
+            standalone = {
+                "E": self.test_e_sequence_tame,
+                "F": self.test_f_sequence_fast,
+                "G": self.test_g_sequence_random_walk,
+                "H": self.test_h_sequence_regression,
+            }
+            for tid in selected:
+                if tid in standalone:
+                    standalone[tid]()
+
             self.print_summary()
-            
+
             if export_json_path:
                 self.export_json(export_json_path)
-            
+
             return all(r.passed for r in self.results)
         finally:
             self.close()
@@ -1124,15 +1333,20 @@ Examples:
     parser.add_argument("--json", help="Export results to JSON file")
     parser.add_argument("--matrix", action="store_true", help="Run sequence matrix (A-D × 6 sequences)")
     parser.add_argument("--quiet", action="store_true", help="Suppress output")
-    
+    parser.add_argument("--tests", help="Comma-separated test IDs to run (e.g. A,B,C)")
+    parser.add_argument("--load", choices=["loaded", "unloaded"], default="unloaded",
+                        help="Select acceptance limits (default: unloaded)")
+
     args = parser.parse_args()
-    
-    suite = QualityGoalsTestSuite(port=args.port, verbose=not args.quiet)
-    
+    test_list = [t.strip() for t in args.tests.split(",")] if args.tests else None
+
+    suite = QualityGoalsTestSuite(port=args.port, verbose=not args.quiet,
+                                  load=args.load)
+
     if args.matrix:
         success = suite.run_sequence_matrix(export_json_path=args.json)
     else:
-        success = suite.run_all(export_json_path=args.json)
+        success = suite.run_all(export_json_path=args.json, tests=test_list)
     
     sys.exit(0 if success else 1)
 

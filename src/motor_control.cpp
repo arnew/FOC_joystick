@@ -63,6 +63,11 @@ static void configure_motor_pid(uint8_t motor_id, BLDCMotor* motor) {
     motor->PID_velocity.D = MOTOR0_VELOCITY_D;
     
     motor->LPF_angle.Tf = MOTOR0_LPF_ANGLE_TF;
+
+    // Velocity setpoint limit from angle PID (caps approach speed)
+    motor->P_angle.limit = MOTOR0_VELOCITY_LIMIT;
+    // Velocity PID output limit (matches voltage limit)
+    motor->PID_velocity.limit = MOTOR0_VOLTAGE_LIMIT;
     
     Serial.print("[MOTOR] PID P=");
     Serial.print(MOTOR0_PID_P);
@@ -146,7 +151,7 @@ bool home_motor(uint8_t motor_id) {
   }
   
   // Restore full voltage limit
-  motor->voltage_limit = 3.0f;
+  motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
   
   // Verify position is near 0
   if (abs(current_angle[motor_id]) < 0.2f) {
@@ -193,7 +198,7 @@ void update_motor(uint8_t motor_id) {
     motor->voltage_limit = 0.0f;  // No current draw
   } else {
     // In motion - restore full voltage
-    motor->voltage_limit = 3.0f;
+    motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
   }
   
   // Command motor to reach target angle.
@@ -238,6 +243,10 @@ void set_motor_target(uint8_t motor_id,
   // Record movement if target changed
   if (abs(target_angle[motor_id] - angle) > 0.01f) {
     record_motor_movement(motor_id);
+    // Reset velocity PID integral to prevent carry-over oscillation
+    if (motors[motor_id]) {
+      motors[motor_id]->PID_velocity.reset();
+    }
   }
   
   handle_motor_limits(motor_id, angle);
