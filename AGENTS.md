@@ -9,6 +9,8 @@ UNIX - KISS:
     - Build Orthogonal Tools that support composing. 
     - Don't try to be clever.
     - If you catch yourself building epicycles, switch your point of view.
+    - Always respect Millers Number 7+-2 of human understanding:
+        Limit the number of files in a directory, functionalities in an interface, ...
 Only mandatory inventions. When stuff is already available, use the lib, tool, whatever.
 Functions stay small, ideally fit on one monitor page (80x25 to 132x43).
 Knowledge base files need to be readable by a human in about 5 minutes.
