@@ -35,12 +35,12 @@
 // Iteration 16: back to 14 PID, widen unloaded limits to match 2V physics
 //   180° limit cycle is physical: 2V can't damp 7pp motor from 90° approach
 #define MOTOR0_PID_P  10.0f   // Solid authority at 2V
-#define MOTOR0_PID_I  0.3f    // Steady-state pull
-#define MOTOR0_PID_D  2.0f    // Sweet spot (D=2.5 caused D-kick at 2V too)
+#define MOTOR0_PID_I  0.3f*0.3    // Steady-state pull
+#define MOTOR0_PID_D  2.0f*0    // Sweet spot (D=2.5 caused D-kick at 2V too)
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
 #define MOTOR0_VELOCITY_P  0.2f    // Gentle velocity tracking (2V budget)
-#define MOTOR0_VELOCITY_I  0.5f    // Moderate integral with reset
+#define MOTOR0_VELOCITY_I  0.5f *0.3   // Moderate integral with reset
 #define MOTOR0_VELOCITY_D  0.0f    // D for velocity loop
 
 // Motor 0 Limits
