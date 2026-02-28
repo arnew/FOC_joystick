@@ -125,18 +125,9 @@ void update_motor(uint8_t motor_id) {
   float prev_angle = current_angle[motor_id];
   current_angle[motor_id] = motor->shaft_angle;
   
-  // Sync target: SimpleFOC Commander updates motor.target directly,
-  // MIDI/USB updates target_angle[]. Bi-directional sync needed.
-  if (motor->target != target_angle[motor_id]) {
-    // Commander changed it -> update our state
-    target_angle[motor_id] = motor->target;
-  } else {
-    // We changed it (MIDI/USB) -> update motor
-    motor->target = target_angle[motor_id];
-  }
-  
-  // Command motor to reach target angle (uses motor.target internally)
-  motor->move();
+  // Command motor to reach target angle.
+  // target_angle[] is the single source of truth set by MIDI/Commander glue.
+  motor->move(target_angle[motor_id]);
   
   // Diagnostic: detect if motor is stuck
   static unsigned long last_stuck_check = 0;
