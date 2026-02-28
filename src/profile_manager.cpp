@@ -108,6 +108,13 @@ bool switch_to_profile(uint8_t profile_id) {
     return false;
   }
 
+  ProfileType previous_profile = get_active_profile();
+  if ((uint8_t)previous_profile == profile_id) {
+    Serial.print("[PROFILES] Already active: ");
+    Serial.println(ALL_PROFILES[profile_id].name);
+    return true;
+  }
+
   set_active_profile((ProfileType)profile_id);
   bool persisted = save_active_profile();
 
@@ -118,7 +125,11 @@ bool switch_to_profile(uint8_t profile_id) {
   Serial.println(ALL_PROFILES[profile_id].num_axes);
 
   if (persisted) {
-    Serial.println("[PROFILES] Saved (USB identity applies on next reboot)");
+    Serial.println("[PROFILES] Saved");
+    Serial.println("[PROFILES] Rebooting now to apply USB identity...");
+    Serial.flush();
+    delay(100);
+    rp2040.reboot();
   } else {
     Serial.println("[PROFILES] WARNING: save failed");
   }
