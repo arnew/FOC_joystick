@@ -17,6 +17,7 @@ Knowledge base files need to be readable by a human in about 5 minutes.
 All code patches/commits should follow the Linux Kernel Mailing List guidance for patches.
 DO NOT LITTER: Put files in (sub-)folders. Start new files only after having a holistic look at the setup.
 Show your work: When testing, show all observations (target, actual, variance, criteria) before deriving conclusions.
+Test logs show all observations: Every test step MUST print target, actual, error, and acceptance criteria. A timeout or failure line without stating where the motor actually is, is a bug in the test.
 Clean as you go: `git status` clean before and after each session. No artifacts committed. No date-stamped files outside sessions/.
 
 **Development Model**: 
