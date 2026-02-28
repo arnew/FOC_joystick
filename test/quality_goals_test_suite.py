@@ -163,20 +163,47 @@ class QualityGoalsTestSuite:
     """Complete quality goals verification suite"""
     
     def __init__(self, port: str = '/dev/ttyACM0', verbose: bool = True,
-                 load: str = 'unloaded'):
+                 load: str = 'unloaded', verbose_readings: bool = False):
         """Initialize test suite
         
         Args:
             port: Serial port device
             verbose: Print debug output
             load: 'loaded' or 'unloaded' — selects acceptance limits
+            verbose_readings: Print every telemetry reading from device
         """
         self.port = port
         self.verbose = verbose
+        self.verbose_readings = verbose_readings
         self.ser = None
         self.results: List[TestResult] = []
         self.log_lines: List[str] = []
         self.limits = LIMITS_LOADED if load == 'loaded' else LIMITS_UNLOADED
+
+    def _log_reading(self, phase: str, actual_deg: float,
+                     commanded_target_deg: Optional[float] = None,
+                     device_target_deg: Optional[float] = None,
+                     tolerance_deg: Optional[float] = None):
+        """Log one telemetry reading when verbose_readings is enabled."""
+        if not self.verbose_readings:
+            return
+
+        target_for_error = commanded_target_deg if commanded_target_deg is not None else device_target_deg
+        if target_for_error is None:
+            self._log(f"  [READ:{phase}] actual={actual_deg:.2f}°")
+            return
+
+        error_deg = abs(actual_deg - target_for_error)
+        criteria = f"error≤±{tolerance_deg:.1f}°" if tolerance_deg is not None else "error=n/a"
+
+        if device_target_deg is None:
+            self._log(
+                f"  [READ:{phase}] target={target_for_error:.2f}° actual={actual_deg:.2f}° "
+                f"error={error_deg:.2f}° criterion={criteria}")
+        else:
+            self._log(
+                f"  [READ:{phase}] cmd_target={target_for_error:.2f}° dev_target={device_target_deg:.2f}° "
+                f"actual={actual_deg:.2f}° error={error_deg:.2f}° criterion={criteria}")
         
     def connect(self, ready_timeout: float = 10.0) -> bool:
         """Connect to device and wait until telemetry is flowing.
@@ -318,8 +345,14 @@ class QualityGoalsTestSuite:
                 if match:
                     telemetry_lines += 1
                     actual_rad = float(match.group(1))
+                    device_target_deg = math.degrees(float(match.group(2)))
                     actual_deg = math.degrees(actual_rad)
                     error = abs(actual_deg - target_deg)
+
+                    self._log_reading("wait", actual_deg,
+                                      commanded_target_deg=target_deg,
+                                      device_target_deg=device_target_deg,
+                                      tolerance_deg=tolerance_deg)
 
                     last_actual_deg = actual_deg
                     last_error_deg = error
@@ -373,7 +406,9 @@ class QualityGoalsTestSuite:
                 line = self.ser.readline().decode('utf-8', errors='ignore').strip()
                 m = re.search(r'A=([\-\d.]+)', line)
                 if m:
-                    return math.degrees(float(m.group(1)))
+                    actual_deg = math.degrees(float(m.group(1)))
+                    self._log_reading("current", actual_deg)
+                    return actual_deg
             time.sleep(0.05)
         return None
 
@@ -401,7 +436,13 @@ class QualityGoalsTestSuite:
                     actual_rad = float(match.group(1))
                     target_rad = float(match.group(2))
                     actual_deg = math.degrees(actual_rad)
+                    device_target_deg = math.degrees(target_rad)
                     error = abs(actual_deg - target_deg)
+
+                    self._log_reading("settle", actual_deg,
+                                      commanded_target_deg=target_deg,
+                                      device_target_deg=device_target_deg,
+                                      tolerance_deg=tolerance_deg)
 
                     trajectory.append(Sample(
                         timestamp=time.time() - start_time,
@@ -446,6 +487,14 @@ class QualityGoalsTestSuite:
                 line = self.ser.readline().decode('utf-8', errors='ignore').strip()
                 match = re.search(r'A=([\-\d.]+)\s+T=([\-\d.]+)', line)
                 if match:
+                    actual_deg = math.degrees(float(match.group(1)))
+                    device_target_deg = math.degrees(float(match.group(2)))
+                    self._log_reading(
+                        "hold", actual_deg,
+                        commanded_target_deg=device_target_deg,
+                        device_target_deg=device_target_deg,
+                        tolerance_deg=self.limits["hold_mean"])
+
                     samples.append(Sample(
                         timestamp=time.time() - start,
                         actual_rad=float(match.group(1)),
@@ -729,6 +778,11 @@ class QualityGoalsTestSuite:
                     if match:
                         actual = float(match.group(1))
                         target = float(match.group(2))
+                        self._log_reading(
+                            "legacy", math.degrees(actual),
+                            commanded_target_deg=math.degrees(target),
+                            device_target_deg=math.degrees(target),
+                            tolerance_deg=self.limits["settle_tolerance"])
                         
                         # Only sample at requested interval
                         if time.time() - last_sample_time >= interval_sec:
@@ -1323,6 +1377,7 @@ def main():
         epilog="""
 Examples:
   python3 quality_goals_test_suite.py                        # Run standard tests
+    python3 quality_goals_test_suite.py -v                     # Print every telemetry reading
   python3 quality_goals_test_suite.py --matrix               # Run A-D across 6 sequences
   python3 quality_goals_test_suite.py --matrix --json matrix.json  # Export matrix results
   python3 quality_goals_test_suite.py --port /dev/ttyACM0    # Explicit port
@@ -1332,6 +1387,8 @@ Examples:
     parser.add_argument("--port", default="/dev/ttyACM0", help="Serial port")
     parser.add_argument("--json", help="Export results to JSON file")
     parser.add_argument("--matrix", action="store_true", help="Run sequence matrix (A-D × 6 sequences)")
+    parser.add_argument("-v", "--verbose-readings", action="store_true",
+                        help="Print every telemetry reading (target/actual/error/criterion)")
     parser.add_argument("--quiet", action="store_true", help="Suppress output")
     parser.add_argument("--tests", help="Comma-separated test IDs to run (e.g. A,B,C)")
     parser.add_argument("--load", choices=["loaded", "unloaded"], default="unloaded",
@@ -1341,7 +1398,7 @@ Examples:
     test_list = [t.strip() for t in args.tests.split(",")] if args.tests else None
 
     suite = QualityGoalsTestSuite(port=args.port, verbose=not args.quiet,
-                                  load=args.load)
+                                  load=args.load, verbose_readings=args.verbose_readings)
 
     if args.matrix:
         success = suite.run_sequence_matrix(export_json_path=args.json)
