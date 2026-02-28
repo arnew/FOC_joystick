@@ -172,11 +172,12 @@ jobs:
           ls -l /dev/ttyACM0
           udevadm info /dev/ttyACM0 | grep -E "(ID_MODEL|ID_VENDOR|ID_SERIAL)" || true
 
-test-simple:
+  test-simple:
     name: Test - Simple Hardware Verification
     needs: [deploy]
     runs-on: [self-hosted, hardware]
     continue-on-error: true  # Hardware tests are informational only
+
     
     steps:
       - name: Checkout code
