@@ -333,3 +333,32 @@ RP2040 bootloader doesn't support runtime software-triggered bootloader entry af
 ### Lesson
 
 Don't invent bootloader solutions — manual BOOTSEL is a hardware constraint. DTR-based 1200bps touch works for some Arduino boards but is unreliable on RP2040 with TinyUSB stack. Accept it and optimize the press-upload workflow instead.
+
+---
+
+## 5. Haptic Endstop Overshoot Cascade ❌
+
+**Status**: OPEN — no working fix, root cause identified  
+**Date**: 2026-03-01  
+**Full writeup**: [tuning/HAPTIC_ENDSTOP_INVESTIGATION.md](tuning/HAPTIC_ENDSTOP_INVESTIGATION.md)
+
+### What Was Attempted
+
+Six different approaches to prevent PID ring-down from cascading through all haptic detents after multi-revolution overshoot:
+1. Stateless position+hysteresis rewrite (fixed drift, not cascade)
+2. Guard zone (30° past endstop) — cascade on re-entry
+3. 5-state machine with SETTLING — timeout always fires, then cascade
+4. Three SETTLING variants (loose/window/none) — all cascade
+5. Velocity gate — cascade at velocity zero-crossings
+6. Velocity gate + cooldown — broke normal operation
+
+### Why They All Failed
+
+The fundamental problem: **detent transitions and PID overshoot are indistinguishable in position space**. A 12° displacement could be a user push or a PID oscillation peak. Every gating strategy either blocks real user input (cooldown, strict settling) or lets the cascade through (loose tolerances, velocity-only gate).
+
+### Lesson
+
+- Don't build epicycles on a broken conceptual model
+- The velocity-at-zero-crossing insight was key: it proves instantaneous velocity is insufficient
+- Rate limiting or integrated-displacement tracking are promising next directions
+- Coarser detents (20° step) may be a pragmatic alternative

@@ -79,7 +79,10 @@ def main():
                         # Compact one-line display
                         haptic_info = ""
                         if haptic_state:
-                            haptic_info = f"  | detent={haptic_state.get('detent','?')} snap={haptic_state.get('snap','?')}° raw={haptic_state.get('raw','?')}°"
+                            haptic_info = (f"  | {haptic_state.get('state','?'):8s}"
+                                          f" detent={haptic_state.get('detent','?')}"
+                                          f" snap={haptic_state.get('snap','?')}°"
+                                          f" raw={haptic_state.get('raw','?')}°")
                         
                         print(f"  T={target_deg:7.1f}°  A={actual_deg:7.1f}°  "
                               f"err={error_deg:+6.1f}°  var={t['variance']:.4f}  "
@@ -97,6 +100,13 @@ def main():
                                 haptic_state['snap'] = p.split('=')[1].rstrip('°')
                             elif p.startswith('raw='):
                                 haptic_state['raw'] = p.split('=')[1].rstrip('°')
+                    except:
+                        pass
+
+                elif 'state:' in line:
+                    # Parse: "  state:      TRACKING"
+                    try:
+                        haptic_state['state'] = line.split('state:')[1].strip()
                     except:
                         pass
                 
