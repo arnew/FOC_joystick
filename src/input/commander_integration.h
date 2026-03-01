@@ -16,7 +16,7 @@
 
 /**
  * Initialize SimpleFOC Commander
- * Registers motor commands (M0, M1)
+ * Registers motor + profile + haptic commands
  */
 void init_commander();
 

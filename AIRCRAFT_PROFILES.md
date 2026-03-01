@@ -1,215 +1,134 @@
-# Aircraft Profiles
+# Aircraft Control Profiles
 
-This firmware includes pre-configured MIDI control mappings for three aircraft types: Airbus A320, Cessna 172, and Glider.
+10 pre-configured control profiles for Cessna 172, Airbus A320, and Glider.
+Each profile configures one motor axis with realistic haptic feedback.
 
-## Overview
+Source data: [.agentic/AIRCRAFT_CONTROLS_RESEARCH.md](.agentic/AIRCRAFT_CONTROLS_RESEARCH.md)
 
-The firmware supports three aircraft profiles that define which MIDI Control Change (CC) numbers control the motor. Since the current hardware has only one motor, only one axis is active at a time. The profile determines which MIDI CCs the firmware recognizes.
+## Profile Table
+
+| # | Profile | MIDI CC | Range | Haptic | USB PID |
+|---|---------|---------|-------|--------|---------|
+| 0 | Cessna Trim | CC#64 | 180° | Smooth | 0x1701 |
+| 1 | Cessna Throttle | CC#7 | 180° | Smooth | 0x1702 |
+| 2 | Cessna Flaps | CC#5 | 120° | 4 stops (0/10/20/30°) | 0x1703 |
+| 3 | 172RG Gear | CC#35 | 90° | 2 stops (DOWN/UP) | 0x1704 |
+| 4 | A320 Trim | CC#64 | 180° | Smooth | 0x3201 |
+| 5 | A320 Throttle | CC#7 | 120° | 6 gates (REV→TOGA) | 0x3202 |
+| 6 | A320 Flaps | CC#11 | 100° | 5 stops (0/1/2/3/FULL) | 0x3203 |
+| 7 | A320 Spoilers | CC#2 | 90° | 3 pts (retract/mid/full) | 0x3204 |
+| 8 | Glider Trim | CC#64 | 120° | Smooth | 0x7001 |
+| 9 | Glider Spoiler | CC#2 | 90° | 2 stops (locked/full) | 0x7002 |
+
+Single-motor hardware: one profile active at a time.
+Profile switch persists to EEPROM and reboots for USB identity change.
 
 ## Switching Profiles
 
-### Compile-Time Selection
+### Serial (Commander 'A')
 
-Edit [src/config.h](src/config.h) and change the `ACTIVE_CONFIG` and `NUM_ACTIVE_AXES` macros:
-
-```cpp
-// At the bottom of config.h, around line 245-246
-#define ACTIVE_CONFIG A320_CONFIG          // Change this line
-#define NUM_ACTIVE_AXES NUM_A320_AXES      // Change this line to match
+```
+A          — List all profiles + show active
+A0         — Switch to Cessna Trim
+A5         — Switch to A320 Throttle
+...
+A9         — Switch to Glider Spoiler
 ```
 
-**Options:**
-```cpp
-// Airbus A320
-#define ACTIVE_CONFIG A320_CONFIG
-#define NUM_ACTIVE_AXES NUM_A320_AXES
+### MIDI CC#121
 
-// Cessna 172
-#define ACTIVE_CONFIG CESSNA_CONFIG
-#define NUM_ACTIVE_AXES NUM_CESSNA_AXES
+Send CC#121 with value = profile index (0–9).
+Example: CC#121 value 5 → A320 Throttle.
 
-// Glider
-#define ACTIVE_CONFIG GLIDER_CONFIG
-#define NUM_ACTIVE_AXES NUM_GLIDER_AXES
-```
+## Haptic Modes
 
-Then rebuild and upload:
-```bash
-platformio run -e pico_1motor_endless
-# (Hold BOOTSEL, then it uploads)
-```
+Each profile uses one of three haptic modes:
 
-### Runtime Selection via Serial Commands
+- **Smooth** — Free rotation, no detents. Trims and throttles.
+- **Custom detent map** — Defined stop positions with per-detent strength.
+  Flaps, gear, spoilers.
+- **Gate mode** — Like custom map, but snaps only within a capture zone.
+  Free proportional movement between gates. A320 throttle.
 
-Switch aircraft profiles **without recompiling** via serial commands using the `A` command:
+Detent maps are defined in [src/config.h](src/config.h) as `DetentPoint` arrays.
+Each point has a position (0–100%) and strength (0.0–1.0).
 
-```bash
-# Show available profiles and current profile
-A
-
-# Switch to A320
-A0
-
-# Switch to Cessna
-A1
-
-# Switch to Glider
-A2
-```
-
-Example:
-```
-> A
-[PROFILES] Available aircraft profiles:
-  0: A320
-  1: Cessna
-  2: Glider
-[PROFILES] Current: A320
-
-> A1
-[PROFILES] Switched to: Cessna
-  Axes: 4
-
-> A
-[PROFILES] Current: Cessna
-```
-
-### Runtime Selection via MIDI
-
-Switch profiles using MIDI Control Change message **CC#121**:
-
-| CC#121 Value | Profile  |
-|--------------|----------|
-| 0            | A320     |
-| 1            | Cessna   |
-| 2            | Glider   |
-
-**Example:** Send `CC#121` with value `0` to switch to A320 profile.
-
-The profile switches immediately. All axis mappings (CC#7, CC#11, etc.) update to the new profile's configuration.
-
-Use any serial terminal (Arduino IDE, minicom, `picocom`, etc.) connected to `/dev/ttyACM0`.
-
-## Aircraft Configurations
-
-### Airbus A320
-
-**Available Controls:**
-| Axis | MIDI CC | Range | Type | Hardware |
-|------|---------|-------|------|----------|
-| Throttle | #7 | 0-100% | Limited (0-180°) | pico_1motor_limited |
-| Flaps | #11 | 0,1,2,3,Full | Limited (0-180°) | pico_1motor_limited |
-| Trim | #64 | -100% to +100% | Endless (360°) | pico_1motor_endless |
-| Spoilers | #2 | 0-100% | Limited (0-180°) | pico_1motor_limited |
-| Landing Gear | #32 | 0-100% | Limited (0-180°) | pico_1motor_limited |
-
-**Usage:**
-To control Airbus A320 throttle, send MIDI CC#7:
-```
-CC#7 value 0   → Motor at 0° (minimum throttle)
-CC#7 value 64  → Motor at 90° (mid throttle)
-CC#7 value 127 → Motor at 180° (maximum throttle)
-```
+## Profile Details
 
 ### Cessna 172
 
-**Available Controls:**
-| Axis | MIDI CC | Range | Type | Hardware |
-|------|---------|-------|------|----------|
-| Throttle | #7 | 0-100% | Limited (0-180°) | pico_1motor_limited |
-| Flaps | #5 | 0-5 positions | Limited (0-180°) | pico_1motor_limited |
-| Trim | #64 | -100% to +100% | Endless (360°) | pico_1motor_endless |
-| Landing Gear | #35 | 0-100% | Limited (0-180°) | pico_1motor_limited |
+| Control | Haptic | Notes |
+|---------|--------|-------|
+| Trim | Smooth, 180° | Real trim wheel: ~18 turns, no clicks, cable friction hold |
+| Throttle | Smooth, 180° | Real: push-pull plunger, friction lock |
+| Flaps | 4 stops, 120° | 172SP: 0°/10°/20°/30° (pre-1981 had 5 stops to 40°) |
+| 172RG Gear | 2 stops, 90° | Standard 172 has fixed gear; this is the RG variant |
 
-**Note:** Flaps on Cessna 172 have 5 discrete positions. Map CC#5 values:
-- 0-25: Position 0 (retracted)
-- 26-51: Position 1 (10°)
-- 52-76: Position 2 (20°)
-- 77-102: Position 3 (30°)
-- 103-127: Position 4 (full, 40°)
+### Airbus A320
 
-### Glider
+| Control | Haptic | Notes |
+|---------|--------|-------|
+| Trim | Smooth, 180° | THS trim wheels: 12 turns, no clicks, motor-driven in normal law |
+| Throttle | 6 gates, 120° | REV FULL→REV IDLE→IDLE→CLB→FLX→TOGA, proportional between gates |
+| Flaps | 5 stops, 100° | Lever positions: 0/1/2/3/FULL (1+F is a flight law, not a lever stop) |
+| Spoilers | 3 pts, 90° | Proportional: hard stops at 0%/100%, soft midpoint reference |
 
-**Available Controls:**
-| Axis | MIDI CC | Range | Type | Hardware |
-|------|---------|-------|------|----------|
-| Spoilers/Airbrakes | #2 | 0-100% | Limited (0-180°) | pico_1motor_limited |
-| Trim | #64 | -100% to +100% | Endless (360°) | pico_1motor_endless |
+**A320 Throttle Gate Spacing** (matches real A320 / TCA quadrant):
 
-## Hardware Configurations
+| Gate | Position | Strength |
+|------|----------|----------|
+| REV FULL | 0% | 1.0 (hard) |
+| REV IDLE | 12% | 0.8 |
+| IDLE | 25% | 1.0 (hard) |
+| CLB | 52% | 1.0 (hard) |
+| FLX/MCT | 73% | 0.8 |
+| TOGA | 100% | 1.0 (hard) |
 
-The firmware can also be built for different motor types:
+### Glider (ASK-21 / Discus / LS4 class)
 
-### pico_1motor_endless
-Single motor with endless rotation (360°), suitable for trim axes.
-
-Build:
-```bash
-platformio run -e pico_1motor_endless
-```
-
-### pico_1motor_limited  
-Single motor with limited range (0-180°), suitable for throttle/flaps/spoiler axes.
-
-Build:
-```bash
-platformio run -e pico_1motor_limited
-```
+| Control | Haptic | Notes |
+|---------|--------|-------|
+| Trim | Smooth, 120° | Real: spring trim, 90–120° travel, lighter range than airplane |
+| Spoiler | 2 stops, 90° | Locked closed (hard) + full open (stop). Proportional between. |
 
 ## MIDI Protocol
 
-The firmware uses standard MIDI Control Change (CC) protocol. Any MIDI tool that can send CC messages will work:
+Standard MIDI Control Change (0xB0). Value 0–127 maps linearly to 0–100% of the profile's travel range.
 
-**Protocol:**
-- Type: Control Change (0xB0)
-- CC Number: 0-127 (depends on configured aircraft profile)
-- Value: 0-127 (0 = minimum, 127 = maximum)
-
-**Examples using `mido` Python library:**
 ```python
 import mido
-
-# Open MIDI output to the device
-output = mido.open_output("pico_1motor_endless")  # or device name
-
-# Send CC#64 (Trim) at 50% position
-msg = mido.Message('control_change', channel=0, control=64, value=64)
-output.send(msg)
-
-# Send CC#7 (Throttle) at full
-msg = mido.Message('control_change', channel=0, control=7, value=127)
-output.send(msg)
+out = mido.open_output("FOC - Cessna Trim")
+# Set trim to 50%
+out.send(mido.Message('control_change', control=64, value=64))
+# Switch to profile 5 (A320 Throttle)
+out.send(mido.Message('control_change', control=121, value=5))
 ```
 
-See [test/debug_midi.py](test/debug_midi.py) for an interactive test tool.
+## Live Tuning (Commander 'W')
 
-## Future Enhancements
+Haptic parameters are adjustable at runtime without recompiling:
 
-### MSFS Integration (Future)
+```
+W        — Show current haptic config
+WE0/WE1  — Disable/enable haptic layer
+WR180    — Set range (degrees)
+WC90     — Set center position (degrees)
+WN18     — Set uniform detent count (clears custom map)
+WS0.5    — Set detent strength (0.0–1.0)
+WM5.0    — Set endstop margin (degrees)
+```
 
-A companion script will be provided that:
-1. Reads flight simulator data (throttle, flaps, trim, etc.)
-2. Converts to appropriate MIDI CC commands
-3. Sends to the Pico via USB MIDI
+## Design Rationale
 
-### Multi-Motor Configuration (Future)
+Profile data verified against real aircraft references:
+- Cessna 172S/SP POH (Pilot's Operating Handbook)
+- Airbus A320 FCOM (Flight Crew Operating Manual)
+- Glider manuals (ASK-21, Discus, LS4)
+- Thrustmaster TCA Quadrant gate measurements
 
-Support for dual-motor setups (one motor per axis) with simultaneous control of two aircraft controls.
-
-This enables true "follow-along" motion where the motor follows the simulator's control state.
-
-## Troubleshooting
-
-**Motor not responding to MIDI?**
-1. Check that the correct profile is compiled in
-2. Verify the MIDI CC number matches the profile
-3. Use [test/debug_midi.py](test/debug_midi.py) to test
-4. Check the debug serial output: `platformio device monitor`
-
-**MIDI CC values don't map to expected angles?**
-- CC#0 → 0° minimum
-- CC#127 → 180° maximum (for limited motors) or 360° (for endless)
-- Linear  interpolation is used between min and max angles
-
-See [src/config.h](src/config.h) for the implementation of `cc_to_angle()`.
-
+Key design choices:
+- **Trims are smooth** — no real trim wheel has clicks (RC-6)
+- **Glider trim is 120°** — real glider trim has less travel than airplane trim (RC-7)
+- **A320 throttle uses gate mode** — proportional between detents, snap within capture zone
+- **A320 spoilers have no intermediate clicks** — real speed brake is proportional
+- **Each profile gets a unique USB PID** — host OS sees distinct devices
