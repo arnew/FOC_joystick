@@ -71,10 +71,8 @@ void init_telemetry() {
 }
 
 void telemetry_update(float target_rad, float actual_rad) {
-  // Shortest-path signed error
+  // Signed error (unbounded motor: no wrap, actual − target is true error)
   float error = actual_rad - target_rad;
-  if (error >  PI) error -= 2.0f * PI;
-  if (error < -PI) error += 2.0f * PI;
 
   // Remove oldest sample when buffer full (before overwrite)
   if (ring_count >= RING_SIZE) {

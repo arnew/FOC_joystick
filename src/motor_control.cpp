@@ -288,13 +288,9 @@ void handle_motor_limits(uint8_t motor_id,
   float original_angle = angle;
   
   if (profile->is_endless) {
-    // Endless: wrap 0-2π
-    while (angle < 0.0f) {
-      angle += 6.28318f;
-    }
-    while (angle > 6.28318f) {
-      angle -= 6.28318f;
-    }
+    // Endless: motor angle is unbounded (-inf to +inf).
+    // The haptic layer owns range clamping — nothing to do here.
+    return;
   } else {
     // Limited: clamp to range
     angle = constrain(angle, 
