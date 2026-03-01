@@ -210,6 +210,7 @@ void update_motor(uint8_t motor_id) {
   // Command motor to reach target angle.
   // target_angle[] is the single source of truth set by MIDI/Commander glue.
   motor->move(target_angle[motor_id]);
+
   
   // Record position hold statistics (use shortest-path error for endless motors)
   float error = abs(delta);
@@ -269,6 +270,11 @@ float get_motor_angle(uint8_t motor_id) {
 float get_motor_target(uint8_t motor_id) {
   if (motor_id >= 2) return 0.0f;
   return target_angle[motor_id];
+}
+
+float get_motor_velocity(uint8_t motor_id) {
+  if (motor_id >= 2) return 0.0f;
+  return motors[motor_id]->shaft_velocity;
 }
 
 void handle_motor_limits(uint8_t motor_id, 

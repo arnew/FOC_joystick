@@ -9,6 +9,7 @@ Documentation for motor PID calibration, including implementation details and us
 - [implementation/](implementation/) - Technical implementation details
 - [guides/](guides/) - User-facing how-to documentation
 - [ENCODER_LINEARIZATION.md](ENCODER_LINEARIZATION.md) - AS5600 eccentricity fix options (physical, software, register)
+- [HAPTIC_ENDSTOP_INVESTIGATION.md](HAPTIC_ENDSTOP_INVESTIGATION.md) - Haptic detent overshoot cascade (open problem)
 
 ---
 
