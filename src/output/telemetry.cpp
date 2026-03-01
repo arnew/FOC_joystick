@@ -1,8 +1,11 @@
 /**
- * telemetry.cpp - Rolling Statistics & Structured Telemetry Output
+ * telemetry.cpp — Rolling Statistics & Structured Telemetry Output
  *
- * Ring buffer tracks signed shortest-path error at FOC rate.
- * Outputs @T lines at 10Hz for host-side observation-based testing.
+ * Two error trackers fed at FOC rate (~1kHz):
+ *   1. Ring buffer (0.5s) — variance + settle detection.
+ *   2. EMA on squared error (α ≈ 0.005, τ ≈ 200ms) — RMS on query.
+ *
+ * Output: @T <ms>,<target>,<actual>,<error>,<rms>,<variance>,<settled>
  */
 
 #include "telemetry.h"
@@ -41,6 +44,12 @@ static float last_target = 0.0f;
 static float last_actual = 0.0f;
 static float last_error  = 0.0f;
 
+// EMA filter on squared error → RMS on query
+// α = 1/200 ≈ 0.005 → τ ≈ 200 ticks ≈ 200ms at 1kHz FOC rate
+static constexpr float EMA_ALPHA = 1.0f / 200.0f;
+static float ema_sq_error = 0.0f;
+static bool  ema_primed   = false;   // first sample seeds, no smoothing
+
 // ============================================================================
 // INTERNAL HELPERS
 // ============================================================================
@@ -67,7 +76,10 @@ void init_telemetry() {
   consec_settled = 0;
   ticks_since_recompute = 0;
 
-  Serial.println("[TELEM] Format: @T ms,target,actual,error,variance,settled");
+  ema_sq_error = 0.0f;
+  ema_primed = false;
+
+  Serial.println("[TELEM] Format: @T ms,target,actual,error,rms,variance,settled");
 }
 
 void telemetry_update(float target_rad, float actual_rad) {
@@ -89,6 +101,15 @@ void telemetry_update(float target_rad, float actual_rad) {
   ring_sum_sq += error * error;
   ring_head = (ring_head + 1) % RING_SIZE;
 
+  // EMA on squared error (cheap rolling RMS)
+  float sq = error * error;
+  if (!ema_primed) {
+    ema_sq_error = sq;
+    ema_primed = true;
+  } else {
+    ema_sq_error += EMA_ALPHA * (sq - ema_sq_error);
+  }
+
   // Cache for output
   last_target = target_rad;
   last_actual = actual_rad;
@@ -107,6 +128,10 @@ void telemetry_update(float target_rad, float actual_rad) {
   } else {
     consec_settled = 0;
   }
+}
+
+float telemetry_get_rms_error() {
+  return sqrtf(ema_sq_error);
 }
 
 float telemetry_get_variance() {
@@ -131,8 +156,10 @@ void telemetry_output(unsigned long now_ms) {
   float var = telemetry_get_variance();
   uint8_t settled = telemetry_is_settled() ? 1 : 0;
 
-  char line[80];
-  snprintf(line, sizeof(line), "@T %lu,%.4f,%.4f,%.4f,%.6f,%u",
-           now_ms, last_target, last_actual, last_error, var, settled);
+  float rms = telemetry_get_rms_error();
+
+  char line[96];
+  snprintf(line, sizeof(line), "@T %lu,%.4f,%.4f,%.4f,%.4f,%.6f,%u",
+           now_ms, last_target, last_actual, last_error, rms, var, settled);
   Serial.println(line);
 }

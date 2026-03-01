@@ -86,7 +86,7 @@ void haptic_update() {
     if (!config.enabled) return;
 
     // 1. Observe actual motor position
-    float actual_rad = get_motor_angle(0);
+    float actual_rad = get_motor_angle();
     float actual_deg = actual_rad * RAD2DEG;
 
     // 2. Snap to nearest detent
@@ -97,7 +97,7 @@ void haptic_update() {
     unsigned long now = millis();
     if ((now - last_diag_ms) >= DIAG_INTERVAL_MS) {
         last_diag_ms = now;
-        float vel = get_motor_velocity(0) * RAD2DEG;
+        float vel = get_motor_velocity() * RAD2DEG;
         Serial.print("HAPTIC_DIAG motor=");
         Serial.print(actual_deg, 1);
         Serial.print(" snap=");
@@ -109,7 +109,7 @@ void haptic_update() {
     }
 
     // 4. Set motor target
-    set_motor_target(0, new_snap * DEG2RAD);
+    set_motor_target(new_snap * DEG2RAD);
 
     snapped_deg = new_snap;
     current_detent = new_detent;
@@ -132,10 +132,6 @@ float haptic_get_target_deg() {
     return snapped_deg;
 }
 
-float haptic_get_raw_deg() {
-    return snapped_deg;  // No separate "raw" in v2 — motor is the state
-}
-
 uint16_t haptic_get_hid_value() {
     if (config.detent_count == 0) {
         // Continuous: map range linearly to 0–1023
@@ -156,7 +152,7 @@ void haptic_set_position(float angle_deg) {
     float hi = max_angle_deg();
     float clamped = constrain(angle_deg, lo, hi);
     current_detent = snap_to_detent(clamped, snapped_deg);
-    set_motor_target(0, snapped_deg * DEG2RAD);
+    set_motor_target(snapped_deg * DEG2RAD);
 }
 
 // ============================================================================

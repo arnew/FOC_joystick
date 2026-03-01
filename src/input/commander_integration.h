@@ -1,20 +1,11 @@
 /**
- * commander_integration.h - SimpleFOC Commander Interface
+ * commander_integration.h — SimpleFOC Commander Interface
  * 
  * Standard SimpleFOC Commander for:
- * - Real-time PID tuning
- * - Motor parameter adjustment  
- * - Hardware test verification (CI)
- * - SimpleFOC Studio integration
- * - Statistics & self-inspection
- * 
- * Commands:
- *   M0         - Access motor 0 (shows available commands)
- *   M0T3.14    - Set target to 3.14 radians
- *   M0C        - Run motion test
- *   M0?        - Get motor status
- *   S          - Show device statistics
- *   S0         - Reset statistics counters
+ * - Real-time PID tuning (M prefix)
+ * - Target setting (T)
+ * - Aircraft profile switching (A)
+ * - Haptic layer config (W)
  */
 
 #ifndef COMMANDER_INTEGRATION_H

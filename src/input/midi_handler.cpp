@@ -6,6 +6,7 @@
 #include "motor_control.h"
 #include "config.h"
 #include "profile_manager.h"
+#include "haptic_layer.h"
 
 // ============================================================================
 // MIDI PROFILE CONTROL
@@ -95,22 +96,10 @@ void process_midi_message(uint8_t status,
   // Calculate target angle
   float target = cc_to_angle(axis, cc_value);
   
-  // Set motor target
-  set_motor_target(axis->motor_id, target);
-  
-  // Debug output (commented to prevent USB CDC spam)
-  // Rapid MIDI messages (e.g., trim wheel) can flood USB with 10-20 msgs/sec
-  // Each message = 12 Serial.print() calls = 120-240 USB transactions/sec
-  // Uncomment for debugging, but expect USB instability with continuous input
-  /*
-  Serial.print("MIDI: CC#");
-  Serial.print(cc_number);
-  Serial.print(" = ");
-  Serial.print(cc_value);
-  Serial.print(" → ");
-  Serial.print(axis->label);
-  Serial.print(" Motor");
-  Serial.print(axis->motor_id);
-  Serial.print(" angle: ");
-  Serial.println(target, 4);
-  */}
+  // Route through haptic layer when active (snaps to nearest detent)
+  if (haptic_get_config().enabled) {
+    haptic_set_position(target * (180.0f / 3.14159f));
+  } else {
+    set_motor_target(target);
+  }
+}

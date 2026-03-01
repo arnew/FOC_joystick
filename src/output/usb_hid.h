@@ -44,10 +44,8 @@ void send_hid_report();
 
 /**
  * Convert motor angle to joystick value
- * @param motor_id Motor index (0 or 1)
  * @return USB joystick value (0-1023)
  */
-uint16_t angle_to_joystick_value(
-  uint8_t motor_id);
+uint16_t angle_to_joystick_value();
 
 #endif // USB_HID_H

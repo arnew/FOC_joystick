@@ -35,7 +35,7 @@ static void cmd_set_target(char* cmd) {
   // (it may be empty when query/help is used)
   if (!cmd || !cmd[0]) {
     // Query current target and convert radians → degrees for display
-    float target_rad = get_motor_target(0);
+    float target_rad = get_motor_target();
     float target_deg = target_rad * 180.0f / PI;
     Serial.print("[CMD] T target=");
     Serial.print(target_deg);
@@ -51,14 +51,14 @@ static void cmd_set_target(char* cmd) {
   if (haptic_get_config().enabled) {
     haptic_set_position(angle_deg);
   } else {
-    set_motor_target(0, angle_rad);
+    set_motor_target(angle_rad);
   }
   
-  Serial.print("[CMD] Set target_angle[0] = ");
+  Serial.print("[CMD] Set target_angle = ");
   Serial.print(angle_deg);
   Serial.println("°");
-  Serial.print("[CMD] Verify: target_angle[0] = ");
-  float verify_rad = get_motor_target(0);
+  Serial.print("[CMD] Verify: target_angle = ");
+  float verify_rad = get_motor_target();
   float verify_deg = verify_rad * 180.0f / PI;
   Serial.print(verify_deg);
   Serial.println("°");

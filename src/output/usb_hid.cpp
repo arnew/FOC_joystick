@@ -94,20 +94,14 @@ void send_hid_report() {
 // ANGLE CONVERSION
 // ============================================================================
 
-uint16_t angle_to_joystick_value(
-  uint8_t motor_id) {
-  
-  if (motor_id >= 2) {
-    return 512;  // Center
-  }
-  
+uint16_t angle_to_joystick_value() {
   const MotorProfile* profile = 
-    get_motor_profile(motor_id);
+    get_motor_profile(0);
   if (!profile) {
     return 512;
   }
   
-  float angle = get_motor_angle(motor_id);
+  float angle = get_motor_angle();
   float normalized = 0.5f;
   
   // Normalize to 0.0-1.0
@@ -122,10 +116,8 @@ uint16_t angle_to_joystick_value(
   // Apply axis reversal (runtime-selected profile)
   const ProfileMetadata* meta = get_profile_metadata();
   for (uint8_t i = 0; i < meta->num_axes; i++) {
-    if (meta->config[i].motor_id == motor_id) {
-      if (meta->config[i].reversed) {
-        normalized = 1.0f - normalized;
-      }
+    if (meta->config[i].reversed) {
+      normalized = 1.0f - normalized;
       break;
     }
   }

@@ -58,7 +58,7 @@ static void service_hid_output(unsigned long now_ms) {
   if (haptic_get_config().enabled) {
     axis_values[0] = haptic_get_hid_value();
   } else {
-    axis_values[0] = angle_to_joystick_value(0);
+    axis_values[0] = angle_to_joystick_value();
   }
   axis_values[1] = 512;  // Y-axis placeholder (single-motor system)
   send_hid_report();
@@ -89,9 +89,7 @@ static void print_configuration() {
     Serial.print(i);
     Serial.print(": ");
     Serial.print(meta->config[i].label);
-    Serial.print(" (M");
-    Serial.print(meta->config[i].motor_id);
-    Serial.print(", CC#");
+    Serial.print(" (CC#");
     Serial.print(meta->config[i].midi_cc);
     Serial.println(")");
   }
@@ -122,9 +120,9 @@ void setup() {
   Serial.println("     HID Joystick (8btn + 2axis)");
   
   // NOW initialize motor (after USB is fully ready)
-  Serial.println("Initializing Motor 0...");
-  init_motor(0);
-  Serial.println("Motor 0 ready");
+  Serial.println("Initializing motor...");
+  init_motor();
+  Serial.println("Motor ready");
   
   // Initialize MIDI handler
   init_midi_handler();
@@ -148,10 +146,10 @@ void setup() {
 void loop() {
   
   // 1. FOC control (~1kHz)
-  update_motor(0);
+  update_motor();
 
   // 2. Feed telemetry ring buffer (every FOC tick)
-  telemetry_update(target_angle[0], current_angle[0]);
+  telemetry_update(target_angle, current_angle);
 
   // 3. Haptic: observe actual → snap to detent → set target
   haptic_update();

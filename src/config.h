@@ -8,7 +8,6 @@
  * Defines physical and operational parameters for a single motor
  */
 struct MotorProfile {
-  uint8_t id;              // Motor index (0-1)
   float min_angle;         // Minimum angle (degrees)
   float max_angle;         // Maximum angle (degrees)
   bool is_endless;         // True = trim/endless rotation; False = limited range
@@ -21,7 +20,6 @@ struct MotorProfile {
  * Maps a control axis to motor and MIDI input
  */
 struct AxisProfile {
-  uint8_t motor_id;        // Motor index this axis controls (0-1)
   uint8_t midi_cc;         // MIDI CC number (0-127)
   const char* label;       // Human-readable name (Throttle, Flaps, etc.)
   bool reversed;           // Reverse joystick output (100% → 0%)
@@ -35,21 +33,19 @@ struct AxisProfile {
 // Hardware-dependent configurations for different motor types
 
 static const MotorProfile MOTOR_0_ENDLESS = {
-  .id = 0,
   .min_angle = 0.0f,
   .max_angle = 6.28318f,  // 360 degrees in radians (endless)
   .is_endless = true,
   .voltage_limit = 2.0f,
-  .label = "Motor 0 (Endless Trim)"
+  .label = "Motor (Endless Trim)"
 };
 
 static const MotorProfile MOTOR_0_LIMITED = {
-  .id = 0,
   .min_angle = 0.0f,
   .max_angle = 3.14159f,  // 180 degrees in radians (limited range)
   .is_endless = false,
   .voltage_limit = 2.0f,
-  .label = "Motor 0 (Limited 0-180°)"
+  .label = "Motor (Limited 0-180°)"
 };
 
 // ============================================================================
@@ -66,12 +62,11 @@ static const MotorProfile MOTOR_0_LIMITED = {
 // - CC#2  → Spoilers (0-100%, limited 0-180°)
 // - CC#32 → Landing Gear (0-100%, limited 0-180°, with detents)
 
-// TODO: DETENTS are not implmented!
-// TODO: the description and implementation does not respect README.md
+// FIXME: DETENTS are not implmented!
+// FIXME: the description and implementation does not respect README.md
 
 static const AxisProfile A320_CONFIG[] = {
   {
-    .motor_id = 0,
     .midi_cc = 7,           // Throttle
     .label = "A320 Throttle",
     .reversed = false,
@@ -79,7 +74,6 @@ static const AxisProfile A320_CONFIG[] = {
     .motor = MOTOR_0_LIMITED
   },
   {
-    .motor_id = 0,
     .midi_cc = 11,          // Flaps
     .label = "A320 Flaps",
     .reversed = false,
@@ -87,7 +81,6 @@ static const AxisProfile A320_CONFIG[] = {
     .motor = MOTOR_0_LIMITED
   },
   {
-    .motor_id = 0,
     .midi_cc = 64,          // Trim (Sustain pedal)
     .label = "A320 Trim",
     .reversed = false,
@@ -95,7 +88,6 @@ static const AxisProfile A320_CONFIG[] = {
     .motor = MOTOR_0_ENDLESS
   },
   {
-    .motor_id = 0,
     .midi_cc = 2,           // Spoilers
     .label = "A320 Spoilers",
     .reversed = false,
@@ -103,7 +95,6 @@ static const AxisProfile A320_CONFIG[] = {
     .motor = MOTOR_0_LIMITED
   },
   {
-    .motor_id = 0,
     .midi_cc = 32,          // Landing Gear
     .label = "A320 Landing Gear",
     .reversed = false,
@@ -126,12 +117,11 @@ static const AxisProfile A320_CONFIG[] = {
 // - CC#64 → Trim (endless -100% to +100%)
 // - CC#35 → Landing Gear (0-100%, limited 0-180°)
 
-// TODO: DETENTS are not implmented!
-// TODO: the description and implementation does not respect README.md
+// FIXME: DETENTS are not implmented!
+// FIXME: the description and implementation does not respect README.md
 
 static const AxisProfile CESSNA_CONFIG[] = {
   {
-    .motor_id = 0,
     .midi_cc = 7,           // Throttle
     .label = "Cessna Throttle",
     .reversed = false,
@@ -139,7 +129,6 @@ static const AxisProfile CESSNA_CONFIG[] = {
     .motor = MOTOR_0_LIMITED
   },
   {
-    .motor_id = 0,
     .midi_cc = 5,           // Flaps
     .label = "Cessna Flaps",
     .reversed = false,
@@ -147,7 +136,6 @@ static const AxisProfile CESSNA_CONFIG[] = {
     .motor = MOTOR_0_LIMITED
   },
   {
-    .motor_id = 0,
     .midi_cc = 64,          // Trim
     .label = "Cessna Trim",
     .reversed = false,
@@ -155,7 +143,6 @@ static const AxisProfile CESSNA_CONFIG[] = {
     .motor = MOTOR_0_ENDLESS
   },
   {
-    .motor_id = 0,
     .midi_cc = 35,          // Landing Gear
     .label = "Cessna Landing Gear",
     .reversed = false,
@@ -176,12 +163,11 @@ static const AxisProfile CESSNA_CONFIG[] = {
 // - CC#2  → Spoilers/Airbrakes (0-100%, limited 0-180°)
 // - CC#64 → Trim (endless -100% to +100%)
 
-// TODO: DETENTS are not implmented!
-// TODO: the description and implementation does not respect README.md
+// FIXME: DETENTS are not implmented!
+// FIXME: the description and implementation does not respect README.md
 
 static const AxisProfile GLIDER_CONFIG[] = {
   {
-    .motor_id = 0,
     .midi_cc = 2,           // Spoilers/Airbrakes
     .label = "Glider Spoilers",
     .reversed = false,
@@ -189,7 +175,6 @@ static const AxisProfile GLIDER_CONFIG[] = {
     .motor = MOTOR_0_LIMITED
   },
   {
-    .motor_id = 0,
     .midi_cc = 64,          // Trim
     .label = "Glider Trim",
     .reversed = false,
@@ -277,61 +262,20 @@ static inline const AxisProfile* find_axis_by_cc_runtime(uint8_t midi_cc) {
 
 /**
  * Find axis profile by MIDI CC number (uses runtime profile)
- * @param midi_cc MIDI control change number
- * @return Pointer to AxisProfile if found, NULL otherwise
  */
 static inline const AxisProfile* find_axis_by_cc(uint8_t midi_cc) {
   return find_axis_by_cc_runtime(midi_cc);
 }
 
 /**
- * Get motor profile by index
- * @param motor_id Motor index (always 0 for single-motor config)
- * @return Pointer to MotorProfile if valid, NULL otherwise
+ * Get the active motor profile (endless or limited, compile-time selected)
  */
-static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
-  if (motor_id != 0) {
-    return NULL;
-  }
-
+static inline const MotorProfile* get_motor_profile(uint8_t /*unused*/ = 0) {
   #ifdef MOTOR_LIMITED
   return &MOTOR_0_LIMITED;
   #else
   return &MOTOR_0_ENDLESS;
   #endif
-
-  return NULL;
-}
-
-/**
- * Find first axis profile by motor ID
- * @param motor_id Motor index (0-1)
- * @return Pointer to first AxisProfile for motor, NULL if none found
- */
-static inline const AxisProfile* find_axis_by_motor(uint8_t motor_id) {
-  const ProfileMetadata* meta = get_profile_metadata();
-  for (uint8_t i = 0; i < meta->num_axes; i++) {
-    if (meta->config[i].motor_id == motor_id) {
-      return &meta->config[i];
-    }
-  }
-  return NULL;
-}
-
-/**
- * Count number of axes controlled by a motor
- * @param motor_id Motor index (0-1)
- * @return Number of axes assigned to motor
- */
-static inline uint8_t count_axes_for_motor(uint8_t motor_id) {
-  const ProfileMetadata* meta = get_profile_metadata();
-  uint8_t count = 0;
-  for (uint8_t i = 0; i < meta->num_axes; i++) {
-    if (meta->config[i].motor_id == motor_id) {
-      count++;
-    }
-  }
-  return count;
 }
 
 /**

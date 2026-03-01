@@ -15,6 +15,7 @@ static constexpr int EEPROM_ADDR_MAGIC = 0;
 static constexpr int EEPROM_ADDR_VERSION = 1;
 static constexpr int EEPROM_ADDR_PROFILE = 2;
 
+// FIXME: profiles need to be there for all planes and controls - so about 10-15 are expected.
 static constexpr uint16_t PROFILE_USB_VID = 0xCAFE;
 static constexpr uint16_t PROFILE_USB_PID_A320 = 0x3200;
 static constexpr uint16_t PROFILE_USB_PID_CESSNA = 0x1720;

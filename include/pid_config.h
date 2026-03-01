@@ -59,21 +59,6 @@
 // Smaller Tf = faster response, less phase lag (critical for settling)
 #define MOTOR0_LPF_ANGLE_TF  0.001f    // 1ms filter (optimizer found 0.01 too slow)
 
-// Motor 1 PID Gains (if enabled)
-#if NUM_MOTORS > 1
-  #define MOTOR1_PID_P  20.0f   // SimpleFOC default
-  #define MOTOR1_PID_I  0.0f
-  #define MOTOR1_PID_D  0.5f
-  
-  #define MOTOR1_VELOCITY_P  0.5f
-  #define MOTOR1_VELOCITY_I  10.0f
-  #define MOTOR1_VELOCITY_D  0.0f
-  
-  #define MOTOR1_VOLTAGE_LIMIT  2.0f
-  #define MOTOR1_CURRENT_LIMIT  2.0f
-  #define MOTOR1_LPF_ANGLE_TF  0.005f
-#endif
-
 // ============================================================================
 // TUNING REFERENCE: Ziegler-Nichols Method
 // ============================================================================

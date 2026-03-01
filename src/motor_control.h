@@ -1,8 +1,7 @@
 /**
- * motor_control.h — SimpleFOC Motor Control
+ * motor_control.h — SimpleFOC Motor Control (single motor)
  *
- * Single BLDC motor (7pp) + AS5600 I2C sensor.
- * Provides: init, FOC loop, target/angle/velocity access.
+ * One BLDC motor (7pp) + AS5600 I2C sensor, angle mode.
  * Motor angle is unbounded (-∞ to +∞).
  */
 
@@ -14,34 +13,29 @@
 #include "config.h"
 
 // ============================================================================
-// MOTOR HARDWARE (single motor)
+// MOTOR HARDWARE
 // ============================================================================
 
 extern MagneticSensorI2C sensor0;
 extern BLDCMotor motor0;
 extern BLDCDriver3PWM driver0;
 
-extern BLDCMotor* motors[1];
-extern BLDCDriver3PWM* drivers[1];
-extern MagneticSensorI2C* sensors[1];
-
 // ============================================================================
 // MOTOR STATE
 // ============================================================================
 
-extern float target_angle[1];
-extern float current_angle[1];
-extern uint8_t active_motor;
+extern float target_angle;
+extern float current_angle;
 
 // ============================================================================
 // API
 // ============================================================================
 
-void init_motor(uint8_t motor_id);
-void update_motor(uint8_t motor_id);
-void set_motor_target(uint8_t motor_id, float angle);
-float get_motor_angle(uint8_t motor_id);
-float get_motor_target(uint8_t motor_id);
-float get_motor_velocity(uint8_t motor_id);
+void  init_motor();
+void  update_motor();
+void  set_motor_target(float angle);
+float get_motor_angle();
+float get_motor_target();
+float get_motor_velocity();
 
 #endif // MOTOR_CONTROL_H

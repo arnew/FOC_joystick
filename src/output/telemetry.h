@@ -1,13 +1,14 @@
 /**
- * telemetry.h - Device-Side Rolling Statistics & Structured Output
+ * telemetry.h — Device-Side Rolling Statistics & Structured Output
  *
- * Computes rolling statistics at FOC rate (~1kHz) in a 0.5s ring buffer:
- *   target, actual, error (signed shortest-path), rolling variance, settled flag.
+ * Two complementary error trackers, both fed at FOC rate (~1kHz):
  *
- * Outputs structured line at 10Hz:
- *   @T <millis>,<target>,<actual>,<error>,<variance>,<settled>
+ *   1. Ring buffer (0.5s) — variance + settle detection for host tests.
+ *   2. EMA filter (α ≈ 0.005, τ ≈ 200ms) on squared error → RMS on query.
+ *      Cheap, O(1), no buffer.  Use for on-device quality gating.
  *
- * The host polls these lines for fast observation-based testing.
+ * Output at 10Hz:
+ *   @T <ms>,<target>,<actual>,<error>,<rms>,<variance>,<settled>
  */
 
 #ifndef TELEMETRY_H
@@ -34,6 +35,12 @@ void telemetry_update(float target_rad, float actual_rad);
  * @param now_ms Current millis() value
  */
 void telemetry_output(unsigned long now_ms);
+
+/**
+ * Rolling RMS error (EMA, τ ≈ 200ms).
+ * @return sqrt(ema_of_squared_error) in radians
+ */
+float telemetry_get_rms_error();
 
 /**
  * Rolling variance of error over the 0.5s window.
