@@ -67,7 +67,7 @@ enum ProfileId : uint8_t {
     PROFILE_CESSNA_TRIM = 0,
     PROFILE_CESSNA_THROTTLE,
     PROFILE_CESSNA_FLAPS,
-    PROFILE_CESSNA_GEAR,
+    PROFILE_CESSNA_172RG_GEAR,
     PROFILE_A320_TRIM,
     PROFILE_A320_THROTTLE,
     PROFILE_A320_FLAPS,
@@ -81,16 +81,16 @@ enum ProfileId : uint8_t {
 // CUSTOM DETENT MAPS
 // ============================================================================
 
-// Cessna 172 flap lever: 5 positions (0°, 10°, 20°, 30°, 40°)
+// Cessna 172SP flap lever: 4 positions (0°, 10°, 20°, 30°)
+// Note: pre-1981 172P had 5 positions up to 40°.
 static const DetentPoint CESSNA_FLAPS_DETENTS[] = {
     {   0.0f, 1.0f },   // 0° retracted
-    {  25.0f, 1.0f },   // 10°
-    {  50.0f, 1.0f },   // 20°
-    {  75.0f, 1.0f },   // 30°
-    { 100.0f, 1.0f },   // 40° full
+    {  33.3f, 1.0f },   // 10°
+    {  66.7f, 1.0f },   // 20°
+    { 100.0f, 1.0f },   // 30° full
 };
 
-// Cessna gear: strong click at DOWN and UP
+// Cessna 172RG gear: strong click at DOWN and UP (standard 172 has fixed gear)
 static const DetentPoint CESSNA_GEAR_DETENTS[] = {
     {   0.0f, 1.0f },   // DOWN
     { 100.0f, 1.0f },   // UP
@@ -104,10 +104,10 @@ static const DetentPoint CESSNA_GEAR_DETENTS[] = {
 //   ref: forums.flightsimulator.com/t/377566
 static const DetentPoint A320_THROTTLE_DETENTS[] = {
     {   0.0f, 1.0f },   // REV FULL
-    {  14.0f, 0.8f },   // REV IDLE
-    {  28.0f, 1.0f },   // IDLE
-    {  64.0f, 1.0f },   // CLB
-    {  82.0f, 0.8f },   // FLX/MCT
+    {  12.0f, 0.8f },   // REV IDLE
+    {  25.0f, 1.0f },   // IDLE
+    {  52.0f, 1.0f },   // CLB   (~36% of IDLE→TOGA, matches TCA)
+    {  73.0f, 0.8f },   // FLX/MCT (~64% of IDLE→TOGA)
     { 100.0f, 1.0f },   // TOGA
 };
 
@@ -120,22 +120,18 @@ static const DetentPoint A320_FLAPS_DETENTS[] = {
     { 100.0f, 1.0f },   // FULL
 };
 
-// A320 spoiler: major stops at 0/Half/Full, minor clicks between
+// A320 speed brake: proportional, no intermediate detents in real aircraft.
+// Hard stop at retracted + full; very soft midpoint reference only.
 static const DetentPoint A320_SPOILER_DETENTS[] = {
-    {   0.0f, 1.0f },   // Retracted (major)
-    {  25.0f, 0.3f },   // 1/4 (minor click)
-    {  50.0f, 1.0f },   // 1/2 (major)
-    {  75.0f, 0.3f },   // 3/4 (minor click)
-    { 100.0f, 1.0f },   // Full (major)
+    {   0.0f, 1.0f },   // Retracted (hard stop)
+    {  50.0f, 0.1f },   // Midpoint reference (very soft)
+    { 100.0f, 1.0f },   // Full (hard stop)
 };
 
-// Glider spoiler: major stops at 0/Half/Full, minor clicks between
+// Glider airbrake: lock at closed, proportional to full. No intermediate detents.
 static const DetentPoint GLIDER_SPOILER_DETENTS[] = {
-    {   0.0f, 1.0f },   // Retracted (major)
-    {  25.0f, 0.3f },   // 1/4 (minor)
-    {  50.0f, 1.0f },   // 1/2 (major)
-    {  75.0f, 0.3f },   // 3/4 (minor)
-    { 100.0f, 1.0f },   // Full (major)
+    {   0.0f, 1.0f },   // Locked closed (hard detent)
+    { 100.0f, 0.8f },   // Full open (physical stop)
 };
 
 // ============================================================================
@@ -157,12 +153,12 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
       0x1702, "FOC - Cessna Throttle" },
 
     { "Cessna Flaps",       5, false, 120.0f, 60.0f, 2.0f,
-      0, 0.0f, CESSNA_FLAPS_DETENTS, 5, false, 0.0f,
+      0, 0.0f, CESSNA_FLAPS_DETENTS, 4, false, 0.0f,
       0x1703, "FOC - Cessna Flaps" },
 
-    { "Cessna Gear",       35, false,  90.0f, 45.0f, 5.0f,
+    { "172RG Gear",        35, false,  90.0f, 45.0f, 5.0f,
       0, 0.0f, CESSNA_GEAR_DETENTS, 2, false, 0.0f,
-      0x1704, "FOC - Cessna Gear" },
+      0x1704, "FOC - 172RG Gear" },
 
     // --- Airbus A320 ---
     { "A320 Trim",         64, false, 180.0f, 90.0f, 2.0f,
@@ -178,7 +174,7 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
       0x3203, "FOC - A320 Flaps" },
 
     { "A320 Spoilers",      2, false,  90.0f, 45.0f, 2.0f,
-      0, 0.0f, A320_SPOILER_DETENTS, 5, false, 0.0f,
+      0, 0.0f, A320_SPOILER_DETENTS, 3, false, 0.0f,
       0x3204, "FOC - A320 Spoilers" },
 
     // --- Glider ---
@@ -187,7 +183,7 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
       0x7001, "FOC - Glider Trim" },
 
     { "Glider Spoiler",     2, false,  90.0f, 45.0f, 2.0f,
-      0, 0.0f, GLIDER_SPOILER_DETENTS, 5, false, 0.0f,
+      0, 0.0f, GLIDER_SPOILER_DETENTS, 2, false, 0.0f,
       0x7002, "FOC - Glider Spoiler" },
 };
 
