@@ -24,6 +24,7 @@
 #include "motor_control.h"
 #include "profile_manager.h"
 #include "statistics.h"
+#include "haptic_layer.h"
 
 // SimpleFOC Commander instance
 Commander commander = Commander(Serial, '\n', ' ');
@@ -46,7 +47,13 @@ static void cmd_set_target(char* cmd) {
   // Parse input as degrees, convert to radians
   float angle_deg = atof(cmd);
   float angle_rad = angle_deg * PI / 180.0f;
-  set_motor_target(0, angle_rad);
+
+  // If haptic layer is active, route through it (snaps to nearest detent)
+  if (haptic_get_config().enabled) {
+    haptic_set_position(angle_deg);
+  } else {
+    set_motor_target(0, angle_rad);
+  }
   
   Serial.print("[CMD] Set target_angle[0] = ");
   Serial.print(angle_deg);
@@ -119,6 +126,7 @@ void init_commander() {
   commander.add('T', cmd_set_target, (const char*)"set target directly");
   commander.add('A', cmd_switch_profile, (const char*)"aircraft profile (0=A320, 1=Cessna, 2=Glider)");
   commander.add('S', cmd_statistics, (const char*)"statistics (S=show, S0=reset)");
+  commander.add('W', haptic_cmd, (const char*)"haptic layer (W=show, WE/WR/WC/WN/WS/WM)");
   
   Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
   Serial.println("[COMMANDER] Commands available:");
@@ -130,6 +138,9 @@ void init_commander() {
   Serial.println("  A<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");
   Serial.println("  S           - Show device statistics");
   Serial.println("  S0          - Reset statistics counters");
+  Serial.println("  W           - Haptic layer config");
+  Serial.println("  WE0/WE1    - Haptic disable/enable");
+  Serial.println("  WR/WC/WN/WS/WM - range/center/detents/strength/margin");
 }
 
 void update_commander() {

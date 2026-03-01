@@ -27,6 +27,7 @@
 #include "statistics.h"
 #include "telemetry.h"
 #include "profile_manager.h"
+#include "haptic_layer.h"
 #ifdef TRIM_WHEEL_PREVIEW
 #include "trim_wheel_preview.h"
 #endif
@@ -68,7 +69,11 @@ static void service_hid_output(unsigned long now_ms) {
   #ifdef TRIM_WHEEL_PREVIEW
   axis_values[0] = get_trim_wheel_hid_value();
   #else
-  axis_values[0] = angle_to_joystick_value(0);
+  if (haptic_get_config().enabled) {
+    axis_values[0] = haptic_get_hid_value();
+  } else {
+    axis_values[0] = angle_to_joystick_value(0);
+  }
   #endif
   axis_values[1] = angle_to_joystick_value(1);
   send_hid_report();
@@ -152,6 +157,9 @@ void setup() {
   #ifdef TRIM_WHEEL_PREVIEW
   init_trim_wheel_preview();
   #endif
+
+  // Initialize haptic layer (runtime enable/disable via WE0/WE1)
+  haptic_init();
   
   // Print configuration
   print_configuration();
@@ -172,6 +180,8 @@ void loop() {
 
   #ifdef TRIM_WHEEL_PREVIEW
   update_trim_wheel_preview();
+  #else
+  haptic_update();
   #endif
 
   // 2. MIDI input (bounded burst handling)

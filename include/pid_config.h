@@ -38,7 +38,9 @@
 //   8 rounds, cost 689→115. Key insight: LPF_Tf=0.001 removes phase lag.
 //   D=1.0 (not 2.0), vel_P=0.1 (gentler), angle_lim=4.0, P=12.
 //   3/4 cardinal settled, validation: 2/4 settled, err=5.5°, overshoot=9.4°.
-#define MOTOR0_PID_P  12.0f    // Higher authority with low LPF phase lag
+// Iteration 18: Bump P 12→16 for stronger haptic detent clicks.
+//   LPF=0.001 keeps phase lag low, so P can go higher without oscillation.
+#define MOTOR0_PID_P  16.0f    // Stiff detent holding for haptic clicks
 #define MOTOR0_PID_I  0.2f     // Steady-state pull
 #define MOTOR0_PID_D  1.0f     // Moderate damping (less D-kick than 2.0 at 2V)
 
