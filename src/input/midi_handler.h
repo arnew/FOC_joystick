@@ -1,16 +1,9 @@
 /**
- * midi_handler.h - USB MIDI Input Handler
- * 
- * Handles MIDI CC messages for motor control and profile selection:
- * - 3-byte MIDI message parsing
- * - State machine for message assembly
- * - CC to motor angle mapping
- * - Profile switching via MIDI CC#121
- 
- * Profile Selection (MIDI):
- *   CC#121 value 0   → Switch to A320 profile
- *   CC#121 value 1   → Switch to Cessna profile
- *   CC#121 value 2   → Switch to Glider profile
+ * midi_handler.h — USB MIDI Input
+ *
+ * CC matching:
+ *   Active profile's midi_cc → position (0-127 → 0-100% of haptic range)
+ *   CC#121               → profile select (value = profile index 0..9)
  */
 
 #ifndef MIDI_HANDLER_H
@@ -35,11 +28,8 @@ void init_midi_handler();
 void handle_midi_byte(uint8_t byte);
 
 /**
- * Process complete MIDI CC message
- * Maps CC# to motor target angle
- * @param status MIDI status byte (0xBn)
- * @param cc_number CC number (0-127)
- * @param cc_value CC value (0-127)
+ * Process complete MIDI CC message.
+ * Routes to haptic_set_position_normalized or switch_to_profile.
  */
 void process_midi_message(uint8_t status, 
                           uint8_t cc_number, 

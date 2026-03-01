@@ -19,6 +19,7 @@
 
 #include "haptic_layer.h"
 #include "motor_control.h"
+#include "config.h"
 #include <math.h>
 
 // ============================================================================
@@ -73,13 +74,21 @@ static int16_t snap_to_detent(float angle_deg, float& snapped_out) {
 // PUBLIC API
 // ============================================================================
 
+void haptic_load_profile(uint8_t profile_id) {
+    const ControlProfile* p = (profile_id < NUM_PROFILES)
+        ? &ALL_PROFILES[profile_id] : &ALL_PROFILES[0];
+    config.range_deg       = p->range_deg;
+    config.center_deg      = p->center_deg;
+    config.detent_count    = p->detent_count;
+    config.detent_strength = p->detent_strength;
+    config.endstop_margin  = p->endstop_margin;
+    config.enabled         = true;
+    snapped_deg    = config.center_deg;
+    current_detent = config.detent_count / 2;
+}
+
 void haptic_init() {
-    config.range_deg = 180.0f;
-    config.center_deg = 90.0f;
-    config.detent_count = 18;
-    config.detent_strength = 1.0f;
-    config.endstop_margin = 2.0f;
-    config.enabled = true;
+    haptic_load_profile(get_active_profile());
 }
 
 void haptic_update() {
@@ -153,6 +162,13 @@ void haptic_set_position(float angle_deg) {
     float clamped = constrain(angle_deg, lo, hi);
     current_detent = snap_to_detent(clamped, snapped_deg);
     set_motor_target(snapped_deg * DEG2RAD);
+}
+
+void haptic_set_position_normalized(float norm_0_1) {
+    norm_0_1 = constrain(norm_0_1, 0.0f, 1.0f);
+    float lo = min_angle_deg();
+    float hi = max_angle_deg();
+    haptic_set_position(lo + norm_0_1 * (hi - lo));
 }
 
 // ============================================================================

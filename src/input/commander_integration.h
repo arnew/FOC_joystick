@@ -1,11 +1,7 @@
 /**
  * commander_integration.h — SimpleFOC Commander Interface
- * 
- * Standard SimpleFOC Commander for:
- * - Real-time PID tuning (M prefix)
- * - Target setting (T)
- * - Aircraft profile switching (A)
- * - Haptic layer config (W)
+ *
+ * Commands: M(motor PID) T(target°) A(profile) W(haptic)
  */
 
 #ifndef COMMANDER_INTEGRATION_H

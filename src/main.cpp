@@ -60,6 +60,10 @@ static void service_hid_output(unsigned long now_ms) {
   } else {
     axis_values[0] = angle_to_joystick_value();
   }
+  // Apply axis reversal from active profile
+  if (get_active_control_profile()->reversed) {
+    axis_values[0] = 1023 - axis_values[0];
+  }
   axis_values[1] = 512;  // Y-axis placeholder (single-motor system)
   send_hid_report();
   last_hid_ms = now_ms;
@@ -76,24 +80,19 @@ static void service_hid_output(unsigned long now_ms) {
 // ============================================================================
 
 static void print_configuration() {
-  const ProfileMetadata* meta = get_profile_metadata();
-
+  const ControlProfile* p = get_active_control_profile();
   Serial.println("\n=== Loaded Configuration ===");
-  Serial.print("Profile: ");
-  Serial.println(meta->name);
-  Serial.print("Axes: ");
-  Serial.println(meta->num_axes);
-  
-  for (uint8_t i = 0; i < meta->num_axes; i++) {
-    Serial.print("  ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(meta->config[i].label);
-    Serial.print(" (CC#");
-    Serial.print(meta->config[i].midi_cc);
-    Serial.println(")");
-  }
-  
+  Serial.print("Profile #");
+  Serial.print(get_active_profile());
+  Serial.print(": ");
+  Serial.println(p->name);
+  Serial.print("  MIDI CC#");
+  Serial.print(p->midi_cc);
+  Serial.print(", ");
+  Serial.print(p->detent_count);
+  Serial.print(" detents, ");
+  Serial.print(p->range_deg);
+  Serial.println("° range");
   Serial.println("\n=== Ready ===");
 }
 

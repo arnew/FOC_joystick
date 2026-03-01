@@ -91,40 +91,19 @@ void send_hid_report() {
 }
 
 // ============================================================================
-// ANGLE CONVERSION
+// ANGLE CONVERSION (fallback when haptic disabled)
 // ============================================================================
 
 uint16_t angle_to_joystick_value() {
-  const MotorProfile* profile = 
-    get_motor_profile(0);
-  if (!profile) {
-    return 512;
-  }
-  
+  const ControlProfile* p = get_active_control_profile();
+  float lo_deg = p->center_deg - p->range_deg / 2.0f;
+  float hi_deg = p->center_deg + p->range_deg / 2.0f;
+  static constexpr float DEG2RAD = 3.14159265f / 180.0f;
+  float lo_rad = lo_deg * DEG2RAD;
+  float hi_rad = hi_deg * DEG2RAD;
+
   float angle = get_motor_angle();
-  float normalized = 0.5f;
-  
-  // Normalize to 0.0-1.0
-  if (profile->max_angle > 
-      profile->min_angle) {
-    normalized = 
-      (angle - profile->min_angle) / 
-      (profile->max_angle - 
-       profile->min_angle);
-  }
-  
-  // Apply axis reversal (runtime-selected profile)
-  const ProfileMetadata* meta = get_profile_metadata();
-  for (uint8_t i = 0; i < meta->num_axes; i++) {
-    if (meta->config[i].reversed) {
-      normalized = 1.0f - normalized;
-      break;
-    }
-  }
-  
-  // Clamp and convert
-  normalized = constrain(
-    normalized, 0.0f, 1.0f);
-  
-  return (uint16_t)(normalized * 1023.0f);
+  float norm = (angle - lo_rad) / (hi_rad - lo_rad);
+  norm = constrain(norm, 0.0f, 1.0f);
+  return (uint16_t)(norm * 1023.0f);
 }

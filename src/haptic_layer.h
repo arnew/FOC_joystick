@@ -31,8 +31,11 @@ struct HapticConfig {
 // PUBLIC API
 // ============================================================================
 
-/** Initialize with default config. Call once in setup(). */
+/** Initialize from active profile. Call once in setup(). */
 void haptic_init();
+
+/** Load haptic params from a ControlProfile by index. */
+void haptic_load_profile(uint8_t profile_id);
 
 /** Process one tick. Call every loop iteration AFTER update_motor(). */
 void haptic_update();
@@ -54,6 +57,9 @@ uint16_t haptic_get_hid_value();
 
 /** Set position externally (e.g. from T command). Snaps to nearest detent. */
 void haptic_set_position(float angle_deg);
+
+/** Set position as 0.0–1.0 fraction of range. For MIDI CC mapping. */
+void haptic_set_position_normalized(float norm_0_1);
 
 // ============================================================================
 // COMMANDER INTEGRATION

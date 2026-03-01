@@ -1,9 +1,9 @@
 /**
- * profile_manager.h - Runtime Aircraft Profile Management
- * 
- * Allows switching between aircraft profiles (A320, Cessna, Glider) without recompiling.
- * Selected profile is persisted and restored on boot.
- * USB identity (product name / PID) follows selected profile at startup.
+ * profile_manager.h — Runtime Control Profile Management
+ *
+ * Persists the selected ControlProfile index to EEPROM.
+ * USB identity (product name / PID) is set from the profile at boot.
+ * Profile switch applies haptic config and reboots for USB re-enumeration.
  */
 
 #ifndef PROFILE_MANAGER_H

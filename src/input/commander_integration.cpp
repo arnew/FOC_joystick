@@ -1,23 +1,12 @@
 /**
- * commander_integration.cpp - SimpleFOC Commander Interface
- * 
- * Standard SimpleFOC Commander for:
- * - Real-time PID tuning
- * - Motor parameter adjustment
- * - Hardware test verification (CI)
- * - SimpleFOC Studio integration
- * - Runtime aircraft profile switching
- * 
- * Usage:
- *   M0         - Access motor 0 (shows available commands)
- *   M0T3.14    - Set target to 3.14 radians (via SimpleFOC)
- *   M0C        - Run motion test
- *   M0?        - Get motor status
- *   T3.14      - Set target directly (test command)
- *   P          - Show available profiles
- *   P0         - Switch to A320 profile
- *   P1         - Switch to Cessna profile
- *   P2         - Switch to Glider profile
+ * commander_integration.cpp — SimpleFOC Commander Interface
+ *
+ * Commands:
+ *   M    — Motor PID tuning (MAP/MAI/MAD/MVP/MVI/MAL/MAF/MLU/ME)
+ *   T45  — Set target to 45° (routes through haptic when enabled)
+ *   A    — List control profiles
+ *   A3   — Switch to profile 3 (persists + reboots for USB identity)
+ *   W    — Haptic config (WE/WR/WC/WN/WS/WM for live tweaking)
  */
 
 #include "commander_integration.h"
@@ -73,20 +62,17 @@ static void cmd_motor(char* cmd) {
 }
 
 // Custom command: Profile switching
-// Format: P (show available), P0 (switch to A320), P1 (Cessna), P2 (Glider)
+// Format: A (list all), A3 (switch to profile 3)
 static void cmd_switch_profile(char* cmd) {
   if (!cmd || !cmd[0]) {
-    // No argument: show current profile and available options
     print_active_profile();
     print_available_profiles();
     return;
   }
 
   uint8_t profile_id = atoi(cmd);
-  if (switch_to_profile(profile_id)) {
-    Serial.println("[PROFILES] ✓ Profile switched successfully");
-  } else {
-    Serial.print("[PROFILES] ✗ Invalid profile ID: ");
+  if (!switch_to_profile(profile_id)) {
+    Serial.print("[PROFILE] Invalid ID: ");
     Serial.println(profile_id);
     print_available_profiles();
   }
@@ -108,20 +94,10 @@ void init_commander() {
 
   // Register custom commands
   commander.add('T', cmd_set_target, (const char*)"set target directly");
-  commander.add('A', cmd_switch_profile, (const char*)"aircraft profile (0=A320, 1=Cessna, 2=Glider)");
+  commander.add('A', cmd_switch_profile, (const char*)"control profile (A=list, A0..A9=switch)");
   commander.add('W', haptic_cmd, (const char*)"haptic layer (W=show, WE/WR/WC/WN/WS/WM)");
   
-  Serial.println("[COMMANDER] Initialized - SimpleFOC standard interface");
-  Serial.println("[COMMANDER] Commands available:");
-  Serial.println("  MAP/MAI/MAD - Angle PID (query/set, e.g. MAP10.0)");
-  Serial.println("  MVP/MVI     - Velocity PID");
-  Serial.println("  MAL/MAF     - Angle limit / LPF Tf");
-  Serial.println("  T<angle>    - Set target directly");
-  Serial.println("  A           - Show profile options");
-  Serial.println("  A<0-2>      - Switch profile (0=A320, 1=Cessna, 2=Glider)");
-  Serial.println("  W           - Haptic layer config");
-  Serial.println("  WE0/WE1    - Haptic disable/enable");
-  Serial.println("  WR/WC/WN/WS/WM - range/center/detents/strength/margin");
+  Serial.println("[COMMANDER] Commands: M(motor) T(target) A(profile) W(haptic)");
 }
 
 void update_commander() {
