@@ -28,9 +28,6 @@
 #include "telemetry.h"
 #include "profile_manager.h"
 #include "haptic_layer.h"
-#ifdef TRIM_WHEEL_PREVIEW
-#include "trim_wheel_preview.h"
-#endif
 
 // ============================================================================
 // I/O RATE SCHEDULING (USB CDC + MIDI + HID)
@@ -66,15 +63,11 @@ static void service_hid_output(unsigned long now_ms) {
     return;
   }
 
-  #ifdef TRIM_WHEEL_PREVIEW
-  axis_values[0] = get_trim_wheel_hid_value();
-  #else
   if (haptic_get_config().enabled) {
     axis_values[0] = haptic_get_hid_value();
   } else {
     axis_values[0] = angle_to_joystick_value(0);
   }
-  #endif
   axis_values[1] = angle_to_joystick_value(1);
   send_hid_report();
   last_hid_ms = now_ms;
@@ -135,9 +128,7 @@ void setup() {
   Serial.println("USB: CDC /dev/ttyACM0 (115200)");
   Serial.println("     Native MIDI port");
   Serial.println("     HID Joystick (8btn + 2axis)");
-  #ifdef TRIM_WHEEL_PREVIEW
-  Serial.println("Mode: Cessna trim preview (click detents + end stops)");
-  #endif
+  Serial.println("Haptic layer: runtime configurable (WE0/WE1 to disable/enable)");
   
   // NOW initialize motor (after USB is fully ready)
   Serial.println("Initializing Motor 0...");
@@ -153,10 +144,6 @@ void setup() {
   // Initialize statistics collection
   init_statistics();
   init_telemetry();
-
-  #ifdef TRIM_WHEEL_PREVIEW
-  init_trim_wheel_preview();
-  #endif
 
   // Initialize haptic layer (runtime enable/disable via WE0/WE1)
   haptic_init();
@@ -178,11 +165,7 @@ void loop() {
   // 2. Feed telemetry ring buffer (every FOC tick)
   telemetry_update(target_angle[0], current_angle[0]);
 
-  #ifdef TRIM_WHEEL_PREVIEW
-  update_trim_wheel_preview();
-  #else
   haptic_update();
-  #endif
 
   // 2. MIDI input (bounded burst handling)
   service_midi_input();

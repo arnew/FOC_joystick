@@ -4,6 +4,7 @@
 
 #include "midi_handler.h"
 #include "motor_control.h"
+#include "haptic_layer.h"
 #include "config.h"
 #include "profile_manager.h"
 #include "statistics.h"
@@ -99,8 +100,14 @@ void process_midi_message(uint8_t status,
   // Calculate target angle
   float target = cc_to_angle(axis, cc_value);
   
-  // Set motor target
-  set_motor_target(axis->motor_id, target);
+  // Route through haptic layer when enabled (snaps to nearest detent),
+  // otherwise set motor target directly.
+  if (haptic_get_config().enabled) {
+    float target_deg = target * 180.0f / PI;
+    haptic_set_position(target_deg);
+  } else {
+    set_motor_target(axis->motor_id, target);
+  }
   
   // Debug output (commented to prevent USB CDC spam)
   // Rapid MIDI messages (e.g., trim wheel) can flood USB with 10-20 msgs/sec
