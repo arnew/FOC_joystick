@@ -102,6 +102,7 @@ class Obs:
     target: float       # rad
     actual: float       # rad
     error: float        # rad (signed shortest-path)
+    rms: float          # rad (EMA RMS error)
     variance: float     # rad^2 (device rolling 0.5s window)
     settled: bool
     host_t: float       # time.time()
@@ -207,20 +208,21 @@ class DeviceLink:
 
     @staticmethod
     def _parse(line: str) -> Optional[Obs]:
-        """Parse '@T ms,target,actual,error,variance,settled'."""
+        """Parse '@T ms,target,actual,error,rms,variance,settled'."""
         if not line.startswith("@T "):
             return None
         try:
             parts = line[3:].split(",")
-            if len(parts) < 6:
+            if len(parts) < 7:
                 return None
             return Obs(
                 device_ms=int(parts[0]),
                 target=float(parts[1]),
                 actual=float(parts[2]),
                 error=float(parts[3]),
-                variance=float(parts[4]),
-                settled=parts[5].strip() == "1",
+                rms=float(parts[4]),
+                variance=float(parts[5]),
+                settled=parts[6].strip() == "1",
                 host_t=time.time(),
             )
         except (ValueError, IndexError):
