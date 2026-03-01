@@ -98,3 +98,8 @@ float get_motor_target() {
 float get_motor_velocity() {
   return motor0.shaft_velocity;
 }
+
+void reset_motor_pid_integral() {
+  motor0.P_angle.reset();
+  motor0.PID_velocity.reset();
+}

@@ -37,5 +37,6 @@ void  set_motor_target(float angle);
 float get_motor_angle();
 float get_motor_target();
 float get_motor_velocity();
+void  reset_motor_pid_integral();  // zero I-term accumulators
 
 #endif // MOTOR_CONTROL_H

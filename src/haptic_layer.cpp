@@ -211,6 +211,9 @@ void haptic_update() {
             committed_detent = new_detent;
             committed_snap   = new_snap;
             last_transition_ms = now;
+            // Kill integral windup so the I-term doesn't push
+            // the motor through the new detent (cascade prevention).
+            reset_motor_pid_integral();
         }
     } else {
         committed_snap = new_snap;
