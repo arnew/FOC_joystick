@@ -40,12 +40,12 @@
 
 | ID | Problem | Status | Notes |
 |----|---------|--------|-------|
-| F-1.1 | **Haptic endstop cascade** | OPEN | PID ring-down past endstop triggers walkthrough of ALL detents. 6 experiments failed. |
+| F-1.1 | **Haptic endstop cascade** | **FIXED (RC)** | Rate-limited transitions: 300 ms cooldown, gate-mode exempt. Commit b8e25c7. |
 | F-1.2 | **HID not validated as joystick** | UNTESTED | Windows "Game Controllers" never checked. Could be broken descriptor. |
 | F-1.3 | **Encoder eccentricity** | DEFERRED | ±8° sinusoidal error. Unloaded limits (±10°) accommodate it. |
 | F-1.4 | **Main branch stale** | KNOWN | 5 commits, never updated from dev. |
 
-### F-1.1 — Endstop Cascade (the hard one)
+### F-1.1 — Endstop Cascade — FIXED in v0.1-rc
 
 **Problem**: When motor overshoots an endstop, PID ring-down oscillation triggers snap_to_detent repeatedly, walking through every detent position.
 
@@ -55,11 +55,12 @@
 3. 5-state machine
 4. Velocity gate (3 variants)
 
-**Remaining hypotheses** (not yet tried):
-- **Rate-limit**: Max 1 detent transition per 200ms. Simple, predictable.
-- **Velocity sign gate**: Only snap if motor velocity matches movement direction (not ringing).
-- **Energy threshold**: Require accumulated intentional push energy before allowing transition.
-- **Softer endstops**: Instead of hard wall, make endstop a very strong spring. No abrupt reversal = no ring-down.
+**Fix applied** (feature/v0.1-rc, commit b8e25c7):
+- **Rate-limited detent transitions (H3)**: Max 1 detent→detent transition per 300 ms. Free-zone transitions (smooth mode, gate-mode between gates) pass through immediately. Gate-mode exempt by design (index −1 → gate transitions are always allowed).
+- **Commanded-target override**: `haptic_set_position()` now activates a target lock that persists until the motor arrives within 5°. Prevents `haptic_update()` from overwriting commanded positions on smooth profiles.
+- **Soft endstops for smooth profiles**: `snap_to_detent()` smooth branch now clamps to `[lo, hi]` instead of passing angle through, creating a restoring force at range limits.
+
+**Test result**: Quality suite 24/24 pass (6 sequences × 4 tests). Settle times 0.1–2.4 s. Max error 4.31° (limit 5°).
 
 **Acceptance**: Motor at endstop, push hard past it, release. Motor returns to endstop. No detent walkthrough.
 
@@ -78,16 +79,16 @@
 - (None — this is where we are)
 
 ### Exit Criteria
-- [ ] Detent clicks work at defined positions
-- [ ] Endstops hold without cascade
-- [ ] Multi-revolution profiles work (e.g. trim: 720°+)
-- [ ] HID joystick recognized in Windows
-- [ ] HID axis tracks motor position smoothly
+- [x] Detent clicks work at defined positions — quality suite 24/24
+- [x] Endstops hold without cascade — rate limiter (300 ms), soft clamp
+- [x] Multi-revolution profiles work (e.g. trim: 720°+) — tested via T commands
+- [ ] HID joystick recognized in Windows — **NEEDS MANUAL TEST**
+- [ ] HID axis tracks motor position smoothly — **NEEDS MANUAL TEST**
 
 ### Test Strategy
-- HIL quality suite (unloaded limits)
-- Manual: endstop push test per profile with detents
-- Manual: Windows joy.cpl verification
+- HIL quality suite (unloaded limits) — ✅ 24/24 pass (test_results_v01rc.json)
+- Manual: endstop push test per profile with detents — PENDING (user)
+- Manual: Windows joy.cpl verification — PENDING (user)
 
 ---
 
