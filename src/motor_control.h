@@ -38,5 +38,6 @@ float get_motor_angle();
 float get_motor_target();
 float get_motor_velocity();
 void  reset_motor_pid_integral();  // zero I-term accumulators
+void  center_motor_to(float desired_rad);  // offset sensor so current pos = desired
 
 #endif // MOTOR_CONTROL_H

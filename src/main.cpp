@@ -141,7 +141,16 @@ void setup() {
 
   // Initialize haptic layer (runtime enable/disable via WE0/WE1)
   haptic_init();
-  
+
+  // Center the motor coordinate system to the profile's center_deg.
+  // The motor stays put; only the software reference frame shifts
+  // so the HID axis starts at 50% with equal range in each direction.
+  {
+    float center_rad = get_active_control_profile()->center_deg
+                     * (PI / 180.0f);
+    center_motor_to(center_rad);
+  }
+
   // Print configuration
   print_configuration();
 }
