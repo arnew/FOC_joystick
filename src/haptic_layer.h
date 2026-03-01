@@ -14,6 +14,8 @@
 
 #include <Arduino.h>
 
+struct DetentPoint;  // defined in config.h
+
 // ============================================================================
 // HAPTIC CONFIGURATION (all adjustable at runtime via Commander 'W' commands)
 // ============================================================================
@@ -21,10 +23,18 @@
 struct HapticConfig {
     float range_deg;        // Total travel range in degrees (e.g. 180.0)
     float center_deg;       // Center position in degrees (e.g. 90.0)
-    uint16_t detent_count;  // Number of detent positions (0 = free rotation)
-    float detent_strength;  // 0.0–1.0: how aggressively to snap (0=off, 1=full)
+    uint16_t detent_count;  // Uniform click count (0 = smooth, ignored if map)
+    float detent_strength;  // Uniform strength 0–1 (ignored if map)
     float endstop_margin;   // degrees past end before hard-stop kicks in
     bool  enabled;          // Master enable
+
+    // Custom detent map (from profile; nullptr → use uniform clicks)
+    const DetentPoint* detent_map;
+    uint8_t detent_map_size;
+
+    // Gate mode: snap only within capture zone, free movement between
+    bool  gate_mode;
+    float gate_capture_deg; // half-width of capture zone (degrees)
 };
 
 // ============================================================================

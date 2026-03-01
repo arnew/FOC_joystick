@@ -69,15 +69,25 @@ void configure_usb_identity_from_profile() {
 void print_available_profiles() {
   Serial.println("\n[PROFILE] Available control profiles:");
   for (uint8_t i = 0; i < NUM_PROFILES; i++) {
+    const ControlProfile& p = ALL_PROFILES[i];
     Serial.print("  ");
     Serial.print(i);
     Serial.print(": ");
-    Serial.print(ALL_PROFILES[i].name);
+    Serial.print(p.name);
     Serial.print("  (CC#");
-    Serial.print(ALL_PROFILES[i].midi_cc);
-    Serial.print(", ");
-    Serial.print(ALL_PROFILES[i].detent_count);
-    Serial.println(" detents)");
+    Serial.print(p.midi_cc);
+    if (p.detent_map) {
+      Serial.print(", ");
+      Serial.print(p.detent_map_size);
+      Serial.print(p.gate_mode ? " gates" : " stops");
+    } else if (p.detent_count > 0) {
+      Serial.print(", ");
+      Serial.print(p.detent_count);
+      Serial.print(" clicks");
+    } else {
+      Serial.print(", smooth");
+    }
+    Serial.println(")");
   }
 }
 

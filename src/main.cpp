@@ -89,8 +89,16 @@ static void print_configuration() {
   Serial.print("  MIDI CC#");
   Serial.print(p->midi_cc);
   Serial.print(", ");
-  Serial.print(p->detent_count);
-  Serial.print(" detents, ");
+  if (p->detent_map) {
+    Serial.print(p->detent_map_size);
+    Serial.print(p->gate_mode ? " gates" : " stops");
+  } else if (p->detent_count > 0) {
+    Serial.print(p->detent_count);
+    Serial.print(" clicks");
+  } else {
+    Serial.print("smooth");
+  }
+  Serial.print(", ");
   Serial.print(p->range_deg);
   Serial.println("° range");
   Serial.println("\n=== Ready ===");

@@ -54,13 +54,52 @@ static float detent_step_deg() {
     return config.range_deg / (float)config.detent_count;
 }
 
-/** Snap an angle to the nearest detent. Returns the detent index. */
+/** Snap an angle to the nearest detent. Returns the detent index.
+ *  Custom map:  iterates detent_map, applies gate_mode capture zone.
+ *  Uniform:     original evenly-spaced logic.
+ *  Returns -1 when no snap (smooth, or gate-mode between gates). */
 static int16_t snap_to_detent(float angle_deg, float& snapped_out) {
+    float lo = min_angle_deg();
+    float hi = max_angle_deg();
+    float range = hi - lo;
+
+    // --- Custom detent map ---
+    if (config.detent_map && config.detent_map_size > 0 && range > 0.0f) {
+        float best_dist = 1e6f;
+        int16_t best_idx = -1;
+        float best_pos = angle_deg;
+
+        for (uint8_t i = 0; i < config.detent_map_size; i++) {
+            if (config.detent_map[i].strength <= 0.0f) continue;
+            float pos = lo + (config.detent_map[i].position_pct / 100.0f) * range;
+            float dist = fabsf(angle_deg - pos);
+
+            // Gate mode: only consider detents within capture zone
+            if (config.gate_mode && dist > config.gate_capture_deg)
+                continue;
+
+            if (dist < best_dist) {
+                best_dist = dist;
+                best_idx  = i;
+                best_pos  = pos;
+            }
+        }
+
+        if (best_idx >= 0) {
+            snapped_out = best_pos;
+            return best_idx;
+        }
+
+        // No detent captured — clamp to range, free movement
+        snapped_out = constrain(angle_deg, lo, hi);
+        return -1;
+    }
+
+    // --- Uniform mode ---
     if (config.detent_count == 0) {
         snapped_out = angle_deg;
         return -1;
     }
-    float lo = min_angle_deg();
     float step = detent_step_deg();
     float idx_f = (angle_deg - lo) / step;
     int16_t idx = (int16_t)roundf(idx_f);
@@ -77,14 +116,20 @@ static int16_t snap_to_detent(float angle_deg, float& snapped_out) {
 void haptic_load_profile(uint8_t profile_id) {
     const ControlProfile* p = (profile_id < NUM_PROFILES)
         ? &ALL_PROFILES[profile_id] : &ALL_PROFILES[0];
-    config.range_deg       = p->range_deg;
-    config.center_deg      = p->center_deg;
-    config.detent_count    = p->detent_count;
-    config.detent_strength = p->detent_strength;
-    config.endstop_margin  = p->endstop_margin;
-    config.enabled         = true;
+    config.range_deg        = p->range_deg;
+    config.center_deg       = p->center_deg;
+    config.detent_count     = p->detent_count;
+    config.detent_strength  = p->detent_strength;
+    config.endstop_margin   = p->endstop_margin;
+    config.detent_map       = p->detent_map;
+    config.detent_map_size  = p->detent_map_size;
+    config.gate_mode        = p->gate_mode;
+    config.gate_capture_deg = p->gate_capture_deg;
+    config.enabled          = true;
     snapped_deg    = config.center_deg;
-    current_detent = config.detent_count / 2;
+    current_detent = (config.detent_map && config.detent_map_size > 0)
+                   ? config.detent_map_size / 2
+                   : config.detent_count / 2;
 }
 
 void haptic_init() {
@@ -133,7 +178,8 @@ void haptic_set_config(const HapticConfig& cfg) {
 }
 
 int16_t haptic_get_detent_index() {
-    if (!config.enabled || config.detent_count == 0) return -1;
+    if (!config.enabled) return -1;
+    if (!config.detent_map && config.detent_count == 0) return -1;
     return current_detent;
 }
 
@@ -142,16 +188,12 @@ float haptic_get_target_deg() {
 }
 
 uint16_t haptic_get_hid_value() {
-    if (config.detent_count == 0) {
-        // Continuous: map range linearly to 0–1023
-        float lo = min_angle_deg();
-        float hi = max_angle_deg();
-        float frac = (snapped_deg - lo) / (hi - lo);
-        frac = constrain(frac, 0.0f, 1.0f);
-        return (uint16_t)(frac * 1023.0f);
-    }
-    // Discrete: map detent index
-    float frac = (float)current_detent / (float)config.detent_count;
+    // Linear position mapping — works for uniform, custom, and gate modes.
+    // snapped_deg already reflects the quantised/free position.
+    float lo = min_angle_deg();
+    float hi = max_angle_deg();
+    float frac = (snapped_deg - lo) / (hi - lo);
+    frac = constrain(frac, 0.0f, 1.0f);
     return (uint16_t)(frac * 1023.0f);
 }
 
@@ -180,10 +222,29 @@ static void print_config() {
     Serial.print("  enabled:    "); Serial.println(config.enabled ? "YES" : "NO");
     Serial.print("  range_deg:  "); Serial.println(config.range_deg);
     Serial.print("  center_deg: "); Serial.println(config.center_deg);
-    Serial.print("  detents:    "); Serial.println(config.detent_count);
-    Serial.print("  strength:   "); Serial.println(config.detent_strength, 2);
+    if (config.detent_map && config.detent_map_size > 0) {
+        Serial.print("  detents:    "); Serial.print(config.detent_map_size);
+        Serial.println(" (custom map)");
+        Serial.print("  gate_mode:  "); Serial.println(config.gate_mode ? "YES" : "NO");
+        if (config.gate_mode) {
+            Serial.print("  gate_cap:   "); Serial.print(config.gate_capture_deg);
+            Serial.println("°");
+        }
+        for (uint8_t i = 0; i < config.detent_map_size; i++) {
+            Serial.print("    ["); Serial.print(i); Serial.print("] ");
+            Serial.print(config.detent_map[i].position_pct, 0);
+            Serial.print("% str=");
+            Serial.println(config.detent_map[i].strength, 2);
+        }
+    } else {
+        Serial.print("  detents:    "); Serial.println(config.detent_count);
+        Serial.print("  strength:   "); Serial.println(config.detent_strength, 2);
+        if (config.detent_count > 0) {
+            Serial.print("  step:       "); Serial.print(detent_step_deg());
+            Serial.println("°");
+        }
+    }
     Serial.print("  endstop_margin: "); Serial.println(config.endstop_margin);
-    Serial.print("  detent_step: "); Serial.print(detent_step_deg()); Serial.println("°");
     Serial.print("  range:      "); Serial.print(min_angle_deg());
     Serial.print("° .. "); Serial.print(max_angle_deg()); Serial.println("°");
     Serial.print("  current:    detent="); Serial.print(current_detent);
@@ -222,10 +283,14 @@ void haptic_cmd(char* cmd) {
             Serial.println("°");
             break;
 
-        case 'N':  // Detent count
+        case 'N':  // Detent count (switches to uniform mode, clears custom map)
             config.detent_count = (uint16_t)atoi(arg);
+            config.detent_map = nullptr;
+            config.detent_map_size = 0;
+            config.gate_mode = false;
             Serial.print("[HAPTIC] detents=");
-            Serial.println(config.detent_count);
+            Serial.print(config.detent_count);
+            Serial.println(" (uniform)");
             break;
 
         case 'S':  // Strength
