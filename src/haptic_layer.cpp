@@ -88,26 +88,13 @@ void haptic_update() {
     // 1. Observe actual motor position
     float actual_rad = get_motor_angle(0);
     float actual_deg = actual_rad * RAD2DEG;
-
-    // 2. Clamp to valid range (this kills the cascade by design —
-    //    any overshoot beyond the range maps to the endstop)
-    float lo = min_angle_deg();
-    float hi = max_angle_deg();
-    float clamped_deg = constrain(actual_deg, lo, hi);
-
-    // 3. Snap to nearest detent
+    
+    // 3. Snap to nearest detent 
     float new_snap = 0.0f;
-    int16_t new_detent = snap_to_detent(clamped_deg, new_snap);
+    int16_t new_detent = snap_to_detent(actual_deg, new_snap);
 
-    // 4. Apply detent strength: blend between free position and snapped
-    float target_deg;
-    if (config.detent_strength >= 1.0f || config.detent_count == 0) {
-        target_deg = new_snap;
-    } else if (config.detent_strength <= 0.0f) {
-        target_deg = clamped_deg;
-    } else {
-        target_deg = clamped_deg + config.detent_strength * (new_snap - clamped_deg);
-    }
+    target_deg = new_snap;
+
 
     // 5. Diagnostic telemetry
     unsigned long now = millis();
@@ -126,11 +113,8 @@ void haptic_update() {
         Serial.println(vel, 1);
     }
 
-    // 6. Set motor target (only if meaningfully changed)
-    float current_target_deg = get_motor_target(0) * RAD2DEG;
-    if (fabsf(target_deg - current_target_deg) > 0.05f) {
         set_motor_target(0, target_deg * DEG2RAD);
-    }
+}
 
     snapped_deg = new_snap;
     current_detent = new_detent;

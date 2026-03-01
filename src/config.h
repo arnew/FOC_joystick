@@ -66,6 +66,9 @@ static const MotorProfile MOTOR_0_LIMITED = {
 // - CC#2  → Spoilers (0-100%, limited 0-180°)
 // - CC#32 → Landing Gear (0-100%, limited 0-180°, with detents)
 
+// TODO: DETENTS are not implmented!
+// TODO: the description and implementation does not respect README.md
+
 static const AxisProfile A320_CONFIG[] = {
   {
     .motor_id = 0,
@@ -123,6 +126,9 @@ static const AxisProfile A320_CONFIG[] = {
 // - CC#64 → Trim (endless -100% to +100%)
 // - CC#35 → Landing Gear (0-100%, limited 0-180°)
 
+// TODO: DETENTS are not implmented!
+// TODO: the description and implementation does not respect README.md
+
 static const AxisProfile CESSNA_CONFIG[] = {
   {
     .motor_id = 0,
@@ -169,6 +175,9 @@ static const AxisProfile CESSNA_CONFIG[] = {
 // Aircraft Controls:
 // - CC#2  → Spoilers/Airbrakes (0-100%, limited 0-180°)
 // - CC#64 → Trim (endless -100% to +100%)
+
+// TODO: DETENTS are not implmented!
+// TODO: the description and implementation does not respect README.md
 
 static const AxisProfile GLIDER_CONFIG[] = {
   {
