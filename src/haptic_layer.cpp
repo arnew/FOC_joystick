@@ -33,6 +33,25 @@ static int16_t current_detent = 0;
 static constexpr float DEG2RAD = PI / 180.0f;
 static constexpr float RAD2DEG = 180.0f / PI;
 
+// --- Rate-limited detent transitions (prevents endstop cascade) ---
+// PID ring-down after overshoot causes 5-10 detent transitions/sec.
+// Normal user interaction: max 2-3 transitions/sec.
+// Cooldown blocks the cascade while allowing normal use.
+// Gate-mode profiles are exempt (transitions pass through free zone).
+static int16_t committed_detent = -1;   // Last accepted detent index
+static float   committed_snap   = 0.0f; // Last accepted snap position
+static unsigned long last_transition_ms = 0;
+static constexpr unsigned long TRANSITION_COOLDOWN_MS = 300;
+
+// --- Commanded position override ---
+// External commands (T, MIDI CC) set a target position.
+// Without this, haptic_update() immediately overwrites the target
+// to match actual position (observe/snap/set), preventing movement.
+// The override persists until the motor arrives within tolerance.
+static bool  has_commanded_target = false;
+static float commanded_target_deg = 0.0f;
+static constexpr float COMMANDED_ARRIVE_DEG = 5.0f; // ≈ SETTLE_ERROR_RAD
+
 // Diagnostic telemetry (print every DIAG_INTERVAL_MS)
 static constexpr unsigned long DIAG_INTERVAL_MS = 100;
 static unsigned long last_diag_ms = 0;
@@ -95,9 +114,9 @@ static int16_t snap_to_detent(float angle_deg, float& snapped_out) {
         return -1;
     }
 
-    // --- Uniform mode ---
+    // --- Smooth mode: free movement with soft endstops ---
     if (config.detent_count == 0) {
-        snapped_out = angle_deg;
+        snapped_out = constrain(angle_deg, lo, hi);
         return -1;
     }
     float step = detent_step_deg();
@@ -130,6 +149,11 @@ void haptic_load_profile(uint8_t profile_id) {
     current_detent = (config.detent_map && config.detent_map_size > 0)
                    ? config.detent_map_size / 2
                    : config.detent_count / 2;
+    // Reset rate limiter so first transition is immediate
+    committed_detent = current_detent;
+    committed_snap   = snapped_deg;
+    last_transition_ms = 0;
+    has_commanded_target = false;
 }
 
 void haptic_init() {
@@ -139,34 +163,76 @@ void haptic_init() {
 void haptic_update() {
     if (!config.enabled) return;
 
-    // 1. Observe actual motor position
     float actual_rad = get_motor_angle();
     float actual_deg = actual_rad * RAD2DEG;
+    unsigned long now = millis();
 
-    // 2. Snap to nearest detent
+    // --- Commanded position override ---
+    // When an external command (T, MIDI CC) set a target, keep
+    // driving there until the motor arrives.  Without this,
+    // observe/snap/set would immediately overwrite the target
+    // to match actual position, preventing any movement.
+    if (has_commanded_target) {
+        float err = fabsf(actual_deg - commanded_target_deg);
+        if (err < COMMANDED_ARRIVE_DEG) {
+            // Motor arrived — resume normal observe/snap/set
+            has_commanded_target = false;
+        } else {
+            set_motor_target(commanded_target_deg * DEG2RAD);
+            snapped_deg = commanded_target_deg;
+            if ((now - last_diag_ms) >= DIAG_INTERVAL_MS) {
+                last_diag_ms = now;
+                Serial.print("HAPTIC_DIAG cmd=");
+                Serial.print(commanded_target_deg, 1);
+                Serial.print(" motor=");
+                Serial.print(actual_deg, 1);
+                Serial.print(" err=");
+                Serial.println(err, 1);
+            }
+            return;
+        }
+    }
+
+    // --- Normal: observe actual → snap to detent → set target ---
     float new_snap = 0.0f;
     int16_t new_detent = snap_to_detent(actual_deg, new_snap);
 
-    // 3. Diagnostic telemetry
-    unsigned long now = millis();
+    // Rate-limit detent transitions (endstop cascade prevention).
+    // Only rate-limit real detent→detent changes.
+    // Free movement (index -1: smooth, gate-mode between) passes through.
+    if (new_detent != committed_detent) {
+        bool accept = true;
+        if (new_detent >= 0 && committed_detent >= 0) {
+            if ((now - last_transition_ms) < TRANSITION_COOLDOWN_MS) {
+                accept = false;
+            }
+        }
+        if (accept) {
+            committed_detent = new_detent;
+            committed_snap   = new_snap;
+            last_transition_ms = now;
+        }
+    } else {
+        committed_snap = new_snap;
+    }
+
+    // Diagnostic telemetry
     if ((now - last_diag_ms) >= DIAG_INTERVAL_MS) {
         last_diag_ms = now;
         float vel = get_motor_velocity() * RAD2DEG;
         Serial.print("HAPTIC_DIAG motor=");
         Serial.print(actual_deg, 1);
         Serial.print(" snap=");
-        Serial.print(new_snap, 1);
+        Serial.print(committed_snap, 1);
         Serial.print(" det=");
-        Serial.print(new_detent);
+        Serial.print(committed_detent);
         Serial.print(" vel=");
         Serial.println(vel, 1);
     }
 
-    // 4. Set motor target
-    set_motor_target(new_snap * DEG2RAD);
-
-    snapped_deg = new_snap;
-    current_detent = new_detent;
+    set_motor_target(committed_snap * DEG2RAD);
+    snapped_deg = committed_snap;
+    current_detent = committed_detent;
 }
 
 const HapticConfig& haptic_get_config() {
@@ -203,6 +269,14 @@ void haptic_set_position(float angle_deg) {
     float hi = max_angle_deg();
     float clamped = constrain(angle_deg, lo, hi);
     current_detent = snap_to_detent(clamped, snapped_deg);
+    // External command: update committed state, bypass rate limiter
+    committed_detent = current_detent;
+    committed_snap   = snapped_deg;
+    last_transition_ms = millis();
+    // Activate commanded-target override so haptic_update() keeps
+    // driving to this position instead of snapping back to actual.
+    has_commanded_target = true;
+    commanded_target_deg = snapped_deg;
     set_motor_target(snapped_deg * DEG2RAD);
 }
 
