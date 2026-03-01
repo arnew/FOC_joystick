@@ -5,20 +5,7 @@ Agents respect AGENTS.md!
 This is a usb HID joystick that accepts MIDI commands to control SimpleFOC driven motors (USB Composite Device).
 
 **Preconfigured aircraft control input profiles:**
-- Cessna 
-    - Throttle (0-100), 
-    - Flaps (detents for 0,10,20,30,40), 
-    - Gear (strong detent at 0, light/strong switchable detent at 100 ), 
-    - Trim (-100 to 100 with clicks)
-- Airbus 
-    - Throttle (Detents for TO/GA, FLX, CLB, Idle, Rev Idle, Reverse Full; Idle->CLB and RecIdle->RevFull are continuous flat spots in the detent profile for proportional control), 
-    - Flaps (0,1,2,3,Full), 
-    - Spoilers (detents for 0,1/2,Full, in between small clicks), 
-    - Gear (like above), 
-    - Trim (like above)
-- Glider 
-    - Spoiler (like above), 
-    - Trim (like above)
+Precondigured Profiles are provided for the popular Cessna, Airbus and Glider models.
 
 Each control/aircraft is individually selectable, also reflected in the usb descriptor, so that a set of controls for a given flight can be composed just by plugging in the correct preconfigured devices.
 
