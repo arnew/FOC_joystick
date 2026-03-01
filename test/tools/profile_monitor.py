@@ -3,10 +3,16 @@
 Profile Monitor — set a profile and watch debug telemetry + joystick live.
 
 Usage:
-    python3 test/tools/profile_monitor.py              # monitor current profile
-    python3 test/tools/profile_monitor.py 5             # switch to profile 5, then monitor
-    python3 test/tools/profile_monitor.py --serial-only # skip joystick
-    python3 test/tools/profile_monitor.py --joy-only    # skip serial telemetry
+    python3 test/tools/profile_monitor.py                  # monitor current profile
+    python3 test/tools/profile_monitor.py 5                 # switch to profile 5
+    python3 test/tools/profile_monitor.py --serial-only     # skip joystick
+    python3 test/tools/profile_monitor.py --joy-only        # skip serial telemetry
+    python3 test/tools/profile_monitor.py --fix-deadzone    # clear Linux flat/fuzz
+    python3 test/tools/profile_monitor.py --set-flat 100    # set flat to 100
+
+Linux applies flat=range/16 and fuzz=range/256 as dead zone to joystick
+axes.  Use --fix-deadzone to zero them out (calls evdev-joystick, no root).
+Windows DirectInput has no automatic dead zone — this is Linux-specific.
 
 Serial shows @T telemetry (target/actual/error/settled) plus all [PROFILE]
 and [CMD] messages.  Joystick shows axis values from /dev/input/js0 (Linux
@@ -21,6 +27,7 @@ import os
 import select
 import serial
 import struct
+import subprocess
 import sys
 import threading
 import time
@@ -61,6 +68,48 @@ def find_joystick():
     if devs:
         return devs[0], "(unknown)"
     return None, None
+
+
+def find_evdev_for_foc():
+    """Return /dev/input/eventN path for the FOC joystick (for evdev-joystick)."""
+    try:
+        with open("/proc/bus/input/devices") as f:
+            text = f.read()
+        for block in text.split("\n\n"):
+            if "FOC" not in block:
+                continue
+            for line in block.splitlines():
+                if line.startswith("H: Handlers="):
+                    # Tokens: "H:", "Handlers=event18", "js0", ...
+                    for tok in line.replace("=", " ").split():
+                        if tok.startswith("event"):
+                            return f"/dev/input/{tok}"
+    except Exception:
+        pass
+    return None
+
+
+def apply_deadzone(flat=0, fuzz=0):
+    """Set flat/fuzz on FOC joystick via evdev-joystick (no root needed)."""
+    evdev = find_evdev_for_foc()
+    if not evdev:
+        print("  [deadzone] FOC event device not found — skipping")
+        return False
+    ok = True
+    for param, val in [("deadzone", flat), ("fuzz", fuzz)]:
+        try:
+            r = subprocess.run(
+                ["evdev-joystick", "--evdev", evdev, f"--{param}", str(val)],
+                capture_output=True, text=True, timeout=5)
+            for line in r.stdout.strip().splitlines():
+                print(f"  [deadzone] {line}")
+            if r.returncode != 0:
+                print(f"  [deadzone] evdev-joystick --{param} failed: {r.stderr.strip()}")
+                ok = False
+        except FileNotFoundError:
+            print("  [deadzone] evdev-joystick not installed (apt install joystick)")
+            return False
+    return ok
 
 # ── Serial monitor thread ────────────────────────────────────────────
 
@@ -205,6 +254,12 @@ def main():
                     help="Serial port (default: first /dev/ttyACM*)")
     ap.add_argument("--list", action="store_true",
                     help="List profiles and exit")
+    ap.add_argument("--fix-deadzone", action="store_true",
+                    help="Set flat=0 fuzz=0 on FOC joystick (Linux dead zone fix)")
+    ap.add_argument("--set-flat", type=int, default=None, metavar="N",
+                    help="Set joystick flat (dead zone) to N (default: 0 with --fix-deadzone)")
+    ap.add_argument("--set-fuzz", type=int, default=None, metavar="N",
+                    help="Set joystick fuzz (noise filter) to N (default: 0 with --fix-deadzone)")
     args = ap.parse_args()
 
     if args.list:
@@ -245,6 +300,12 @@ def main():
             ser_mon = SerialMonitor(port)
             print(f"✓ Serial reconnected: {port}")
         ser_mon.start()
+
+    # ── Dead zone fix ──────────────────────────────────────────────
+    if args.fix_deadzone or args.set_flat is not None or args.set_fuzz is not None:
+        flat = args.set_flat if args.set_flat is not None else 0
+        fuzz = args.set_fuzz if args.set_fuzz is not None else 0
+        apply_deadzone(flat=flat, fuzz=fuzz)
 
     # ── Joystick ──────────────────────────────────────────────────
     joy_mon = None
