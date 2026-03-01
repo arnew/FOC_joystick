@@ -387,7 +387,7 @@ def test_hid_mapping(dev: DeviceLink) -> Tuple[str, str]:
                      f"(expected≈{expected}) {'OK' if ok else 'FAIL'}")
 
     verdict = PASS if passed else FAIL
-    detail = (f"target: HID 0@min, ~512@center, ~1023@max | "
+    detail = (f"target: HID 0@min, ~32768@center, ~65535@max | "
               f"actual: {'; '.join(lines)} | "
               f"criteria: within tolerance")
     return verdict, detail

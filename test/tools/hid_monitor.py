@@ -42,9 +42,9 @@ def monitor_joystick():
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.JOYAXISMOTION:
-                    # Convert -1.0..1.0 to 0..1023
-                    value = int((event.value + 1.0) / 2.0 * 1023)
-                    print(f"Axis {event.axis}: {event.value:7.4f} ({value:4d}/1023)")
+                    # Convert -1.0..1.0 to 0..65535
+                    value = int((event.value + 1.0) / 2.0 * 65535)
+                    print(f"Axis {event.axis}: {event.value:7.4f} ({value:5d}/65535)")
                 elif event.type == pygame.JOYBUTTONDOWN:
                     print(f"Button {event.button} pressed")
                 elif event.type == pygame.JOYHATMOTION:

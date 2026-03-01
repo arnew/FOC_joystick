@@ -49,7 +49,7 @@ class SimulatedDevice:
             self.angle = min(self.profile.max_angle, max(self.profile.min_angle, self.angle))
 
     def joystick_value(self) -> int:
-        """Return a 10-bit joystick value (0-1023)."""
+        """Return a 16-bit joystick value (0-65535)."""
         span = self.profile.max_angle - self.profile.min_angle
         if span <= 0:
             return 0
@@ -57,4 +57,4 @@ class SimulatedDevice:
         if self.profile.reversed:
             normalized = 1.0 - normalized
         normalized = min(1.0, max(0.0, normalized))
-        return int(round(normalized * 1023))
+        return int(round(normalized * 65535))

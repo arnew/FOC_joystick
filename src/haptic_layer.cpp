@@ -263,7 +263,7 @@ uint16_t haptic_get_hid_value() {
     float hi = max_angle_deg();
     float frac = (snapped_deg - lo) / (hi - lo);
     frac = constrain(frac, 0.0f, 1.0f);
-    return (uint16_t)(frac * 1023.0f);
+    return (uint16_t)(frac * 65535.0f);
 }
 
 void haptic_set_position(float angle_deg) {

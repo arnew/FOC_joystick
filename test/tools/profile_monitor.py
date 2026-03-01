@@ -175,13 +175,13 @@ class JoystickMonitor(threading.Thread):
                     ts, value, typ, number = struct.unpack(JS_EVENT_FMT, chunk)
                     if typ & JS_EVENT_AXIS:
                         self.axes[number] = value
-                        # Convert -32767..32767 → 0..1023 (matches HID descriptor)
-                        val1023 = int((value + 32767) / 65534 * 1023)
-                        pct = val1023 / 1023 * 100
+                        # Convert -32767..32767 → 0..65535 (matches HID descriptor)
+                        val = int((value + 32767) / 65534 * 65535)
+                        pct = val / 65535 * 100
                         bar = "█" * int(pct / 2.5) + "░" * (40 - int(pct / 2.5))
                         init = " (init)" if typ & JS_EVENT_INIT else ""
                         print(
-                            f"  [axis {number}] {val1023:4d}/1023 "
+                            f"  [axis {number}] {val:5d}/65535 "
                             f"({pct:5.1f}%) {bar}{init}"
                         )
         except OSError:

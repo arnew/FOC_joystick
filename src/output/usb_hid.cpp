@@ -17,7 +17,7 @@ Adafruit_USBD_MIDI usb_midi;
 // HID JOYSTICK STATE
 // ============================================================================
 
-uint16_t axis_values[2] = {512, 512};
+uint16_t axis_values[2] = {32768, 32768};
 
 // HID report structure
 typedef struct {
@@ -28,7 +28,7 @@ typedef struct {
 hid_joystick_report_t;
 
 static hid_joystick_report_t 
-  current_report = {0, 512, 512};
+  current_report = {0, 32768, 32768};
 
 // ============================================================================
 // USB HID SETUP
@@ -51,12 +51,12 @@ void setup_usb_hid() {
     0x95, 0x08,       //   Report Count (8)
     0x75, 0x01,       //   Report Size (1)
     0x81, 0x02,       //   Input (Data,Var)
-    // Axes (X, Y) 16-bit, 0-1023
+    // Axes (X, Y) 16-bit, 0-65535
     0x05, 0x01,       //   Usage Page (Desktop)
     0x09, 0x30,       //   Usage (X)
     0x09, 0x31,       //   Usage (Y)
     0x16, 0x00, 0x00, //   Logical Min (0)
-    0x26, 0xFF, 0x03, //   Logical Max (1023)
+    0x26, 0xFF, 0xFF, //   Logical Max (65535)
     0x75, 0x10,       //   Report Size (16)
     0x95, 0x02,       //   Report Count (2)
     0x81, 0x02,       //   Input (Data,Var)
@@ -105,5 +105,5 @@ uint16_t angle_to_joystick_value() {
   float angle = get_motor_angle();
   float norm = (angle - lo_rad) / (hi_rad - lo_rad);
   norm = constrain(norm, 0.0f, 1.0f);
-  return (uint16_t)(norm * 1023.0f);
+  return (uint16_t)(norm * 65535.0f);
 }

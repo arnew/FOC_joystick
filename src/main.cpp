@@ -62,9 +62,9 @@ static void service_hid_output(unsigned long now_ms) {
   }
   // Apply axis reversal from active profile
   if (get_active_control_profile()->reversed) {
-    axis_values[0] = 1023 - axis_values[0];
+    axis_values[0] = 65535 - axis_values[0];
   }
-  axis_values[1] = 512;  // Y-axis placeholder (single-motor system)
+  axis_values[1] = 32768;  // Y-axis placeholder (single-motor system)
   send_hid_report();
   last_hid_ms = now_ms;
 }
