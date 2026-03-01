@@ -70,8 +70,8 @@ def find_joystick():
     return None, None
 
 
-def find_evdev_for_foc():
-    """Return /dev/input/eventN path for the FOC joystick (for evdev-joystick)."""
+def find_foc_input_devices():
+    """Return (eventN_path, jsN_path) for the FOC joystick, or (None, None)."""
     try:
         with open("/proc/bus/input/devices") as f:
             text = f.read()
@@ -80,26 +80,41 @@ def find_evdev_for_foc():
                 continue
             for line in block.splitlines():
                 if line.startswith("H: Handlers="):
-                    # Tokens: "H:", "Handlers=event18", "js0", ...
-                    for tok in line.replace("=", " ").split():
+                    toks = line.replace("=", " ").split()
+                    ev = js = None
+                    for tok in toks:
                         if tok.startswith("event"):
-                            return f"/dev/input/{tok}"
+                            ev = f"/dev/input/{tok}"
+                        elif tok.startswith("js"):
+                            js = f"/dev/input/{tok}"
+                    return ev, js
     except Exception:
         pass
-    return None
+    return None, None
 
 
 def apply_deadzone(flat=0, fuzz=0):
-    """Set flat/fuzz on FOC joystick via evdev-joystick (no root needed)."""
-    evdev = find_evdev_for_foc()
-    if not evdev:
+    """Zero flat/fuzz on both evdev and joydev layers (no root needed).
+
+    Linux has two independent joystick interfaces:
+      evdev  (/dev/input/eventN) — flat/fuzz in absinfo
+      joydev (/dev/input/jsN)    — correction table, computed once at init
+
+    We must fix both: evdev-joystick for the evdev layer, and jscal to
+    reset the joydev correction table.  Windows DirectInput has neither
+    of these — it passes raw HID values through.
+    """
+    ev_path, js_path = find_foc_input_devices()
+    if not ev_path:
         print("  [deadzone] FOC event device not found — skipping")
         return False
+
     ok = True
+    # ── 1. evdev layer: set flat and fuzz via evdev-joystick ─────────
     for param, val in [("deadzone", flat), ("fuzz", fuzz)]:
         try:
             r = subprocess.run(
-                ["evdev-joystick", "--evdev", evdev, f"--{param}", str(val)],
+                ["evdev-joystick", "--evdev", ev_path, f"--{param}", str(val)],
                 capture_output=True, text=True, timeout=5)
             for line in r.stdout.strip().splitlines():
                 print(f"  [deadzone] {line}")
@@ -108,7 +123,31 @@ def apply_deadzone(flat=0, fuzz=0):
                 ok = False
         except FileNotFoundError:
             print("  [deadzone] evdev-joystick not installed (apt install joystick)")
-            return False
+            ok = False
+
+    # ── 2. joydev layer: reset correction table via jscal ────────────
+    #    jscal -s <n_axes>,<type>,<prec>[,<coefs>...],...
+    #    type=0 means "no correction" (linear 1:1), needs no coefs.
+    if js_path:
+        try:
+            r = subprocess.run(
+                ["jscal", "-s", "2,0,0,0,0", js_path],
+                capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                print(f"  [deadzone] jscal: reset joydev correction on {js_path}")
+            else:
+                print(f"  [deadzone] jscal failed: {r.stderr.strip()}")
+                ok = False
+            # Verify
+            r2 = subprocess.run(
+                ["jscal", "-p", js_path],
+                capture_output=True, text=True, timeout=5)
+            if r2.stdout.strip():
+                print(f"  [deadzone] jscal -p: {r2.stdout.strip()}")
+        except FileNotFoundError:
+            print("  [deadzone] jscal not installed (apt install joystick)")
+            ok = False
+
     return ok
 
 # ── Serial monitor thread ────────────────────────────────────────────
