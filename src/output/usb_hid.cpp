@@ -5,7 +5,6 @@
 #include "usb_hid.h"
 #include "motor_control.h"
 #include "config.h"
-#include "statistics.h"
 
 // ============================================================================
 // USB DEVICE INTERFACES
@@ -87,7 +86,6 @@ void send_hid_report() {
         1, 
         &current_report, 
         sizeof(current_report));
-      record_hid_report();
     }
   }
 }

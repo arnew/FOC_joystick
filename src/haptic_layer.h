@@ -1,14 +1,9 @@
 /**
  * haptic_layer.h — Configurable haptic overlay for motor control
  *
- * Adds detent snapping and end-stop enforcement ON TOP of the existing
- * SimpleFOC angle-mode motor.  All parameters are adjustable at runtime
- * via Commander serial commands (W prefix).
- *
- * Architecture:
- *   Motor reads user force as position deviation → haptic_layer converts
- *   raw motor angle into a snapped detent position with end-stop clamping
- *   → sets motor target to the nearest detent.
+ * Architecture (v2 — observe/snap/set):
+ *   Observes actual motor angle → snaps to nearest detent → sets target.
+ *   Motor is the state. No delta accumulation.
  *
  * The layer does NOT touch PID parameters.  It only decides WHAT target
  * the motor should hold.

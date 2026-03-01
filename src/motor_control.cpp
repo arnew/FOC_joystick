@@ -4,7 +4,6 @@
 
 #include "motor_control.h"
 #include "pid_config.h"
-#include "statistics.h"
 
 // ============================================================================
 // MOTOR HARDWARE DEFINITIONS
@@ -112,57 +111,6 @@ void init_motor(uint8_t motor_id) {
   Serial.print("[MOTOR] Motor shaft_angle after initFOC: ");
   Serial.println(motor->shaft_angle);
   Serial.println("[MOTOR] Initialization complete");
-  
-  // Run homing sequence to establish known reference
-  if (home_motor(motor_id)) {
-    Serial.println("[MOTOR] Homing successful - motor ready");
-  } else {
-    Serial.println("[MOTOR] WARNING: Homing failed - proceeding anyway");
-  }
-}
-
-// Motor idle/rest tracking - stop applying current when at rest
-static unsigned long last_movement_time[1] = {0};
-static const uint16_t MOTOR_IDLE_TIMEOUT_MS = 2000;  // Cut power after 2s truly at rest
-static const float IDLE_ERROR_THRESHOLD = 0.017f;     // ~1° — only idle when PID has settled
-
-bool home_motor(uint8_t motor_id) {
-  if (motor_id >= 1 || !motors[motor_id]) return false;
-  
-  BLDCMotor* motor = motors[motor_id];
-  Serial.println("[MOTOR] Starting homing sequence...");
-  
-  // Rotate slowly to find sensor reference (low voltage test move)
-  motor->voltage_limit = 0.5f;  // Very low voltage for gentle rotation
-  set_motor_target(motor_id, PI);  // Try rotating to opposite side
-  
-  // Wait for movement to stabilize
-  for (int i = 0; i < 200; i++) {  // ~2 seconds at 100ms loop
-    motor->loopFOC();
-    motor->move(PI);
-    delay(10);
-  }
-  
-  // Return to 0°
-  set_motor_target(motor_id, 0.0f);
-  for (int i = 0; i < 100; i++) {  // ~1 second
-    motor->loopFOC();
-    motor->move(0.0f);
-    delay(10);
-  }
-  
-  // Restore full voltage limit
-  motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
-  
-  // Verify position is near 0
-  if (abs(current_angle[motor_id]) < 0.2f) {
-    Serial.println("[MOTOR] Homing complete - at 0° reference");
-    return true;
-  }
-  
-  Serial.print("[MOTOR] Homing result: ");
-  Serial.println(current_angle[motor_id]);
-  return true;  // Accept even if not exactly at 0
 }
 
 // ============================================================================
@@ -175,64 +123,17 @@ void update_motor(uint8_t motor_id) {
   }
   
   BLDCMotor* motor = motors[motor_id];
-  unsigned long now = millis();
   
   // Execute FOC control loop
   motor->loopFOC();
   
   // Read actual motor position from sensor
-  float prev_angle = current_angle[motor_id];
   current_angle[motor_id] = motor->shaft_angle;
-  
-  // Track movement time for idle detection
-  float delta = target_angle[motor_id] - current_angle[motor_id];
-  if (delta > PI) delta -= 2.0f * PI;
-  else if (delta < -PI) delta += 2.0f * PI;
-  
-  if (abs(delta) > IDLE_ERROR_THRESHOLD) {  // Only stay active if error > ~1°
-    last_movement_time[motor_id] = now;
-  }
-  
-  // Enter idle mode if target reached and no motion for IDLE_TIMEOUT
-  #ifdef TRIM_WHEEL_PREVIEW
-  // Keep torque active for haptic clicks/end-stops.
-  motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
-  #else
-  if (now - last_movement_time[motor_id] > MOTOR_IDLE_TIMEOUT_MS) {
-    // At rest - reduce voltage to 0 to prevent heat buildup
-    motor->voltage_limit = 0.0f;  // No current draw
-  } else {
-    // In motion - restore full voltage
-    motor->voltage_limit = MOTOR0_VOLTAGE_LIMIT;
-  }
-  #endif
   
   // Command motor to reach target angle.
   // target_angle[] is the single source of truth set by MIDI/Commander glue.
   motor->move(target_angle[motor_id]);
-
   
-  // Record position hold statistics (use shortest-path error for endless motors)
-  float error = abs(delta);
-  record_motor_hold(motor_id, error);
-  
-  // Diagnostic: detect if motor is stuck
-  static unsigned long last_stuck_check = 0;
-  static uint16_t stuck_count = 0;
-  
-  // Every 5 seconds, check if motor has ever moved from 0.0
-  if (now - last_stuck_check >= 5000) {
-    last_stuck_check = now;
-    if (abs(current_angle[motor_id] - 0.0f) < 0.01f && target_angle[motor_id] != 0.0f) {
-      stuck_count++;
-      if (stuck_count <= 3) {  // Warn max 3 times to avoid spam
-        Serial.print("[MOTOR] WARNING: Motor angle stuck at 0.0 with target T=");
-        Serial.println(target_angle[motor_id]);
-      }
-    } else {
-      stuck_count = 0;  // Reset if motor starts responding
-    }
-  }
 }
 
 // ============================================================================
@@ -246,18 +147,7 @@ void set_motor_target(uint8_t motor_id,
   const MotorProfile* profile = 
     get_motor_profile(motor_id);
   if (!profile) return;
-  
-  // Record movement if target changed
-  if (abs(target_angle[motor_id] - angle) > 0.01f) {
-    record_motor_movement(motor_id);
-    // Reset velocity PID integral to prevent carry-over oscillation
-    if (motors[motor_id]) {
-      motors[motor_id]->PID_velocity.reset();
-    }
-  }
-  
-  handle_motor_limits(motor_id, angle);
-  
+      
   target_angle[motor_id] = angle;
   active_motor = motor_id;
 }
@@ -275,31 +165,4 @@ float get_motor_target(uint8_t motor_id) {
 float get_motor_velocity(uint8_t motor_id) {
   if (motor_id >= 2) return 0.0f;
   return motors[motor_id]->shaft_velocity;
-}
-
-void handle_motor_limits(uint8_t motor_id, 
-                         float& angle) {
-  if (motor_id >= 2) return;
-  
-  const MotorProfile* profile = 
-    get_motor_profile(motor_id);
-  if (!profile) return;
-  
-  float original_angle = angle;
-  
-  if (profile->is_endless) {
-    // Endless: motor angle is unbounded (-inf to +inf).
-    // The haptic layer owns range clamping — nothing to do here.
-    return;
-  } else {
-    // Limited: clamp to range
-    angle = constrain(angle, 
-                      profile->min_angle, 
-                      profile->max_angle);
-  }
-  
-  // Record if limit was hit
-  if (abs(angle - original_angle) > 0.01f) {
-    record_motor_limit(motor_id);
-  }
 }

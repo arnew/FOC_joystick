@@ -1,19 +1,12 @@
 /**
- * USB HID Joystick Controller with MIDI Profiles
- * 
- * Dual-motor SimpleFOC controller for Flight Simulator
- * - Motor 0: Throttle, Flaps, Spoilers (0-180°)
- * - Motor 1: Landing Gear, Trim (0-180°, endless trim)
- * 
- * Input: USB MIDI CC messages
+ * main.cpp — USB HID Trim Wheel Controller
+ *
+ * Single BLDC motor (7pp) + AS5600 sensor, SimpleFOC angle mode.
+ * Haptic overlay provides configurable detents and endstops.
+ *
+ * Input:  USB MIDI CC, Serial Commander
  * Output: USB HID joystick (TinyUSB)
  * Tuning: SimpleFOC Commander (SimpleFOC Studio)
- * 
- * Modular Architecture:
- * - motor_control: SimpleFOC integration & FOC loops
- * - midi_handler: USB MIDI CC parsing
- * - usb_hid: HID joystick output
- * - commander_integration: SimpleFOC Studio tuning
  */
 
 #include <Arduino.h>
@@ -21,16 +14,12 @@
 #include <stdio.h>
 #include "config.h"
 #include "motor_control.h"
-#include "midi_handler.h"
-#include "usb_hid.h"
-#include "commander_integration.h"
-#include "statistics.h"
-#include "telemetry.h"
+#include "input/midi_handler.h"
+#include "output/usb_hid.h"
+#include "input/commander_integration.h"
+#include "output/telemetry.h"
 #include "profile_manager.h"
 #include "haptic_layer.h"
-#ifdef TRIM_WHEEL_PREVIEW
-#include "trim_wheel_preview.h"
-#endif
 
 // ============================================================================
 // I/O RATE SCHEDULING (USB CDC + MIDI + HID)
@@ -66,16 +55,12 @@ static void service_hid_output(unsigned long now_ms) {
     return;
   }
 
-  #ifdef TRIM_WHEEL_PREVIEW
-  axis_values[0] = get_trim_wheel_hid_value();
-  #else
   if (haptic_get_config().enabled) {
     axis_values[0] = haptic_get_hid_value();
   } else {
     axis_values[0] = angle_to_joystick_value(0);
   }
-  #endif
-  axis_values[1] = angle_to_joystick_value(1);
+  axis_values[1] = 512;  // Y-axis placeholder (single-motor system)
   send_hid_report();
   last_hid_ms = now_ms;
 }
@@ -131,13 +116,10 @@ void setup() {
   // Wait for CDC interface to register (enables DTR callback)
   delay(500);
   
-  Serial.println("\n=== USB HID Joystick Controller ===");
+  Serial.println("\n=== USB HID Trim Wheel Controller ===");
   Serial.println("USB: CDC /dev/ttyACM0 (115200)");
   Serial.println("     Native MIDI port");
   Serial.println("     HID Joystick (8btn + 2axis)");
-  #ifdef TRIM_WHEEL_PREVIEW
-  Serial.println("Mode: Cessna trim preview (click detents + end stops)");
-  #endif
   
   // NOW initialize motor (after USB is fully ready)
   Serial.println("Initializing Motor 0...");
@@ -150,13 +132,7 @@ void setup() {
   // Initialize Commander (for CI testing and tuning)
   init_commander();
   
-  // Initialize statistics collection
-  init_statistics();
   init_telemetry();
-
-  #ifdef TRIM_WHEEL_PREVIEW
-  init_trim_wheel_preview();
-  #endif
 
   // Initialize haptic layer (runtime enable/disable via WE0/WE1)
   haptic_init();
@@ -170,7 +146,6 @@ void setup() {
 // ============================================================================
 
 void loop() {
-  uint32_t loop_start = micros();
   
   // 1. FOC control (~1kHz)
   update_motor(0);
@@ -178,24 +153,17 @@ void loop() {
   // 2. Feed telemetry ring buffer (every FOC tick)
   telemetry_update(target_angle[0], current_angle[0]);
 
-  #ifdef TRIM_WHEEL_PREVIEW
-  update_trim_wheel_preview();
-  #else
+  // 3. Haptic: observe actual → snap to detent → set target
   haptic_update();
-  #endif
 
-  // 2. MIDI input (bounded burst handling)
+  // 4. MIDI input (bounded burst handling)
   service_midi_input();
-  
-  // 3. Commander input (CI testing, tuning)
+
+  // 5. Commander input (CI testing, tuning)
   update_commander();
 
-  // 4. USB outputs (scheduled)
+  // 6. USB outputs (scheduled)
   unsigned long now_ms = millis();
   service_hid_output(now_ms);
   telemetry_output(now_ms);
-  
-  // 5. Update statistics
-  update_statistics_uptime();
-  record_loop_timing(micros() - loop_start);
 }

@@ -6,7 +6,6 @@
 #include "motor_control.h"
 #include "config.h"
 #include "profile_manager.h"
-#include "statistics.h"
 
 // ============================================================================
 // MIDI PROFILE CONTROL
@@ -36,8 +35,6 @@ void init_midi_handler() {
 // ============================================================================
 
 void handle_midi_byte(uint8_t byte) {
-  record_midi_byte();
-  
   if (midi_buffer_index == 0) {
     // First byte: channel message
     // 0xB0-0xBF = Control Change
@@ -61,7 +58,6 @@ void handle_midi_byte(uint8_t byte) {
     midi_buffer_index = 0;
     
     // Process complete message
-    record_midi_message();
     process_midi_message(
       midi_buffer[0], 
       midi_buffer[1], 

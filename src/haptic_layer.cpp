@@ -88,23 +88,18 @@ void haptic_update() {
     // 1. Observe actual motor position
     float actual_rad = get_motor_angle(0);
     float actual_deg = actual_rad * RAD2DEG;
-    
-    // 3. Snap to nearest detent 
+
+    // 2. Snap to nearest detent
     float new_snap = 0.0f;
     int16_t new_detent = snap_to_detent(actual_deg, new_snap);
 
-    target_deg = new_snap;
-
-
-    // 5. Diagnostic telemetry
+    // 3. Diagnostic telemetry
     unsigned long now = millis();
     if ((now - last_diag_ms) >= DIAG_INTERVAL_MS) {
         last_diag_ms = now;
         float vel = get_motor_velocity(0) * RAD2DEG;
         Serial.print("HAPTIC_DIAG motor=");
         Serial.print(actual_deg, 1);
-        Serial.print(" clamped=");
-        Serial.print(clamped_deg, 1);
         Serial.print(" snap=");
         Serial.print(new_snap, 1);
         Serial.print(" det=");
@@ -113,8 +108,8 @@ void haptic_update() {
         Serial.println(vel, 1);
     }
 
-        set_motor_target(0, target_deg * DEG2RAD);
-}
+    // 4. Set motor target
+    set_motor_target(0, new_snap * DEG2RAD);
 
     snapped_deg = new_snap;
     current_detent = new_detent;

@@ -1,11 +1,9 @@
 /**
- * motor_control.h - SimpleFOC Motor Control Module
- * 
- * Handles single BLDC motor control with SimpleFOC:
- * - Motor initialization
- * - FOC loop execution
- * - Angle control and limits
- * - Motor state management
+ * motor_control.h — SimpleFOC Motor Control
+ *
+ * Single BLDC motor (7pp) + AS5600 I2C sensor.
+ * Provides: init, FOC loop, target/angle/velocity access.
+ * Motor angle is unbounded (-∞ to +∞).
  */
 
 #ifndef MOTOR_CONTROL_H
@@ -16,7 +14,7 @@
 #include "config.h"
 
 // ============================================================================
-// MOTOR DEFINITIONS
+// MOTOR HARDWARE (single motor)
 // ============================================================================
 
 extern MagneticSensorI2C sensor0;
@@ -36,69 +34,14 @@ extern float current_angle[1];
 extern uint8_t active_motor;
 
 // ============================================================================
-// MOTOR CONTROL FUNCTIONS
+// API
 // ============================================================================
 
-/**
- * Initialize motor hardware and FOC with homing sequence
- * Performs:
- * - Driver and sensor initialization
- * - FOC alignment and calibration
- * - Homing routine to establish known reference position
- * @param motor_id Motor index (0 or 1)
- */
 void init_motor(uint8_t motor_id);
-
-/**
- * Run motor homing sequence to find 0° reference position
- * Rotates motor slowly to find sensor null/reference point
- * @param motor_id Motor index
- * @return true if homing successful
- */
-bool home_motor(uint8_t motor_id);
-
-/**
- * Execute FOC control loop for motor
- * Must be called frequently (~1kHz)
- * @param motor_id Motor index (0 or 1)
- */
 void update_motor(uint8_t motor_id);
-
-/**
- * Set target angle for motor
- * @param motor_id Motor index (0 or 1)
- * @param angle Target angle in radians
- */
-void set_motor_target(uint8_t motor_id, 
-                      float angle);
-
-/**
- * Get current motor angle
- * @param motor_id Motor index (0 or 1)
- * @return Current angle in radians
- */
+void set_motor_target(uint8_t motor_id, float angle);
 float get_motor_angle(uint8_t motor_id);
-
-/**
- * Get current motor target angle
- * @param motor_id Motor index (0 or 1)
- * @return Target angle in radians
- */
 float get_motor_target(uint8_t motor_id);
-
-/**
- * Get current motor shaft velocity (from SimpleFOC LPF)
- * @param motor_id Motor index (0 or 1)
- * @return Velocity in rad/s
- */
 float get_motor_velocity(uint8_t motor_id);
-
-/**
- * Apply motor limits (clamp or wrap)
- * @param motor_id Motor index (0 or 1)
- * @param angle Angle to limit (modified in place)
- */
-void handle_motor_limits(uint8_t motor_id, 
-                         float& angle);
 
 #endif // MOTOR_CONTROL_H
