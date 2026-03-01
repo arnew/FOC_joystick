@@ -1,8 +1,15 @@
 /**
  * haptic_layer.cpp — Configurable haptic overlay for motor control
  *
- * Reads motor angle, applies detent snapping + end-stop clamping,
- * updates motor target to produce "clicky" haptic feedback.
+ * Detent detection uses a stateless, position-based algorithm:
+ *   1. Read motor angle, clamp to configured range
+ *   2. Compare clamped position to current detent via hysteresis threshold
+ *   3. Transition one detent when user pushes past 60% of detent spacing
+ *   4. After each transition, resync until motor reaches new target
+ *
+ * Endstop behaviour is implicit: constrain() before the detent check
+ * makes motor overshoot past the range boundary invisible to the
+ * detent logic.  No accumulator → no drift → no walkaway.
  *
  * Commander 'W' sub-commands:
  *   W        — Show current config
@@ -23,15 +30,16 @@
 // ============================================================================
 
 static HapticConfig config;
-static float raw_angle_deg = 0.0f;     // Accumulated user-pushed angle
+static float raw_angle_deg = 0.0f;     // Unclamped motor angle (diagnostic)
 static float snapped_deg = 0.0f;       // Current detent-snapped target
 static int16_t current_detent = 0;
-static float last_motor_rad = 0.0f;
 static bool first_tick = true;
-static bool resync_pending = false;  // After external set_position, skip one delta
+static bool resync_pending = false;     // Wait for motor to reach target
+static unsigned long resync_start_ms = 0;  // Timeout guard
 
 static constexpr float DEG2RAD = PI / 180.0f;
 static constexpr float RAD2DEG = 180.0f / PI;
+static constexpr unsigned long RESYNC_TIMEOUT_MS = 1000;
 
 // ============================================================================
 // HELPERS
@@ -89,86 +97,105 @@ void haptic_init() {
     config.enabled = true;
 
     first_tick = true;
+    resync_pending = false;
+    resync_start_ms = 0;
 }
 
 void haptic_update() {
     if (!config.enabled) return;
 
     float motor_rad = get_motor_angle(0);
+    float motor_deg = motor_rad * RAD2DEG;
+    float lo = min_angle_deg();
+    float hi = max_angle_deg();
 
-    if (first_tick || resync_pending) {
-        last_motor_rad = motor_rad;
-        if (first_tick) {
-            // Cold start: read current motor position
-            raw_angle_deg = motor_rad * RAD2DEG;
-            float lo = min_angle_deg();
-            float hi = max_angle_deg();
-            raw_angle_deg = constrain(raw_angle_deg, lo, hi);
-            current_detent = snap_to_detent(raw_angle_deg, snapped_deg);
-            set_motor_target(0, snapped_deg * DEG2RAD);
-            first_tick = false;
+    raw_angle_deg = motor_deg;  // diagnostic: unclamped motor position
+
+    // ---- First tick: snap to nearest detent from current position ----
+    if (first_tick) {
+        // Clamp to range even on first tick for sane initialization
+        float effective = constrain(motor_deg, lo, hi);
+        current_detent = snap_to_detent(effective, snapped_deg);
+        set_motor_target(0, snapped_deg * DEG2RAD);
+        first_tick = false;
+        resync_pending = true;
+        resync_start_ms = millis();
+        return;
+    }
+
+    // ---- Guard: extreme overshoot past endstop (wrap protection) ----
+    // On an endless motor, pushing a full revolution past the endstop
+    // can cause sensor-wrap tracking glitches in the AS5600.  If the
+    // motor reads more than guard_deg past the range boundary, freeze
+    // haptic state until the motor returns to near-range.
+    {
+        float guard_deg = fmaxf(
+            config.detent_count > 0 ? detent_step_deg() * 2.0f : 30.0f,
+            30.0f);
+        if (motor_deg > hi + guard_deg || motor_deg < lo - guard_deg) {
+            return;  // hold current target, don't touch detent state
         }
-        // Stay in resync until motor arrives at commanded target.
-        // This prevents the motor's approach motion from being picked
-        // up as user input by the delta tracker.
-        float err_rad = fabsf(motor_rad - snapped_deg * DEG2RAD);
-        if (err_rad < 0.02f) {  // ~1.1° — tight enough to avoid overshoot leaking
+    }
+
+    // ---- Resync: wait for motor to approach target before monitoring ----
+    if (resync_pending) {
+        float effective = constrain(motor_deg, lo, hi);
+        float err = fabsf(effective - snapped_deg);
+        float threshold = (config.detent_count > 0)
+                        ? detent_step_deg() * 0.3f  // 30% of step
+                        : 2.0f;                      // 2° for free rotation
+        if (err < threshold || (millis() - resync_start_ms) > RESYNC_TIMEOUT_MS) {
             resync_pending = false;
+            resync_start_ms = 0;
         }
         return;
     }
 
-    // Accumulate user push — only when motor deviates significantly from
-    // the held detent position.  Small PID settling oscillations (motor
-    // wobbling ±1° around the target) should NOT be interpreted as the
-    // user pushing the knob.
-    float delta_rad = angular_delta_rad(last_motor_rad, motor_rad);
-    last_motor_rad = motor_rad;
+    // ---- Clamp motor position to valid range ----
+    // Endstop behaviour is implicit: motor overshoot past the range
+    // boundary is invisible to the detent logic after constrain().
+    float effective = constrain(motor_deg, lo, hi);
 
-    float holding_error_rad = fabsf(motor_rad - snapped_deg * DEG2RAD);
-    if (holding_error_rad > 0.05f) {  // ~3° deadband — user is pushing
-        raw_angle_deg += delta_rad * RAD2DEG;
-    }
+    // ---- Detent transition via hysteresis ----
+    if (config.detent_count > 0) {
+        float step = detent_step_deg();
+        float threshold = step * 0.6f;  // 60% of step spacing
+        float deviation = effective - snapped_deg;
 
-    // End-stop clamping — absorb excess into last_motor_rad so that
-    // motor recovery after user releases doesn't cause a phantom jump.
-    float lo = min_angle_deg();
-    float hi = max_angle_deg();
-    float unclamped = raw_angle_deg;
-    raw_angle_deg = constrain(raw_angle_deg, lo - config.endstop_margin,
-                                             hi + config.endstop_margin);
-    float clamped_away_deg = unclamped - raw_angle_deg;
-    if (clamped_away_deg != 0.0f) {
-        // The motor physically moved past the limit.  Shift our tracking
-        // baseline so the return swing won't be double-counted.
-        last_motor_rad += clamped_away_deg * DEG2RAD;
-    }
-
-    // Clamp effective position to the valid range
-    float effective_deg = constrain(raw_angle_deg, lo, hi);
-
-    // Snap to detent
-    float new_snap = 0.0f;
-    int16_t new_detent = snap_to_detent(effective_deg, new_snap);
-
-    // Apply detent strength: blend between free position and snapped
-    float target_deg;
-    if (config.detent_strength >= 1.0f || config.detent_count == 0) {
-        target_deg = new_snap;
-    } else if (config.detent_strength <= 0.0f) {
-        target_deg = effective_deg;
+        if (deviation > threshold && current_detent < (int16_t)config.detent_count) {
+            current_detent++;
+            snapped_deg = lo + (float)current_detent * step;
+            set_motor_target(0, snapped_deg * DEG2RAD);
+            resync_pending = true;
+            resync_start_ms = millis();
+        } else if (deviation < -threshold && current_detent > 0) {
+            current_detent--;
+            snapped_deg = lo + (float)current_detent * step;
+            set_motor_target(0, snapped_deg * DEG2RAD);
+            resync_pending = true;
+            resync_start_ms = millis();
+        } else if (config.detent_strength < 1.0f) {
+            // Partial strength: blend target between detent and user position
+            float target_deg;
+            if (config.detent_strength <= 0.0f) {
+                target_deg = effective;
+            } else {
+                target_deg = effective
+                           + config.detent_strength * (snapped_deg - effective);
+            }
+            float current_target_deg = get_motor_target(0) * RAD2DEG;
+            if (fabsf(target_deg - current_target_deg) > 0.05f) {
+                set_motor_target(0, target_deg * DEG2RAD);
+            }
+        }
     } else {
-        target_deg = effective_deg + config.detent_strength * (new_snap - effective_deg);
+        // Free rotation (no detents): follow clamped motor position
+        snapped_deg = effective;
+        float current_target_deg = get_motor_target(0) * RAD2DEG;
+        if (fabsf(effective - current_target_deg) > 0.05f) {
+            set_motor_target(0, effective * DEG2RAD);
+        }
     }
-
-    // Only update motor target if it actually changed (avoid PID integral reset churn)
-    float current_target_deg = get_motor_target(0) * RAD2DEG;
-    if (fabsf(target_deg - current_target_deg) > 0.05f) {
-        set_motor_target(0, target_deg * DEG2RAD);
-    }
-
-    snapped_deg = new_snap;
-    current_detent = new_detent;
 }
 
 const HapticConfig& haptic_get_config() {
@@ -177,7 +204,9 @@ const HapticConfig& haptic_get_config() {
 
 void haptic_set_config(const HapticConfig& cfg) {
     config = cfg;
-    first_tick = true;  // Re-initialize positions
+    first_tick = true;
+    resync_pending = false;
+    resync_start_ms = 0;
 }
 
 int16_t haptic_get_detent_index() {
@@ -211,12 +240,11 @@ void haptic_set_position(float angle_deg) {
     if (!config.enabled) return;
     float lo = min_angle_deg();
     float hi = max_angle_deg();
-    raw_angle_deg = constrain(angle_deg, lo, hi);
-    current_detent = snap_to_detent(raw_angle_deg, snapped_deg);
+    angle_deg = constrain(angle_deg, lo, hi);
+    current_detent = snap_to_detent(angle_deg, snapped_deg);
     set_motor_target(0, snapped_deg * DEG2RAD);
-    // Don't set last_motor_rad here — motor hasn't moved yet.
-    // Instead, flag resync so next update just resets the baseline.
     resync_pending = true;
+    resync_start_ms = millis();
 }
 
 // ============================================================================
