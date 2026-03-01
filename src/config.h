@@ -145,7 +145,7 @@ static const DetentPoint GLIDER_SPOILER_DETENTS[] = {
 static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
     // --- Cessna 172 ---
     { "Cessna Trim",       64, false, 180.0f, 90.0f, 2.0f,
-      18, 1.0f, nullptr, 0, false, 0.0f,
+      0, 0.0f, nullptr, 0, false, 0.0f,
       0x1701, "FOC - Cessna Trim" },
 
     { "Cessna Throttle",    7, false, 180.0f, 90.0f, 2.0f,
@@ -162,7 +162,7 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
 
     // --- Airbus A320 ---
     { "A320 Trim",         64, false, 180.0f, 90.0f, 2.0f,
-      18, 1.0f, nullptr, 0, false, 0.0f,
+      0, 0.0f, nullptr, 0, false, 0.0f,
       0x3201, "FOC - A320 Trim" },
 
     { "A320 Throttle",      7, false, 120.0f, 60.0f, 2.0f,
@@ -178,8 +178,8 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
       0x3204, "FOC - A320 Spoilers" },
 
     // --- Glider ---
-    { "Glider Trim",       64, false, 180.0f, 90.0f, 2.0f,
-      18, 1.0f, nullptr, 0, false, 0.0f,
+    { "Glider Trim",       64, false, 120.0f, 60.0f, 2.0f,
+      0, 0.0f, nullptr, 0, false, 0.0f,
       0x7001, "FOC - Glider Trim" },
 
     { "Glider Spoiler",     2, false,  90.0f, 45.0f, 2.0f,
