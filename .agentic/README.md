@@ -16,18 +16,18 @@
 
 ```
 .agentic/
-├─ PURPOSE.md                  What this project is
-├─ AGENT_GUIDELINES.md         How agents work (rules, testing, cleanup)
-├─ KNOWLEDGE_BASE.md           Technical baseline & working state
-├─ FAILED_EXPERIMENTS.md       Dead ends (PID auto-tuning, RB command, dual-motor)
-├─ USB_STABILITY_ISSUE.md      USB bandwidth/CDC congestion fix
-├─ FEATURE_ROADMAP.md          Planned work (phases 1-4) [SUPERSEDED by MILESTONES.md]
-├─ MILESTONES.md               Version plan, test strategy, hardware roadmap
-├─ architecture/               System design, build procedures, hardware setup
-├─ ci/                         CI workflows, scripts, device detection
-├─ testing/                    Test plans, results, device testing guide
-├─ tuning/                     SimpleFOC PID tuning guides
-└─ sessions/                   Session logs, historical records
+├─ PURPOSE.md                        What this project is
+├─ AGENT_GUIDELINES.md               How agents work (rules, testing, cleanup)
+├─ KNOWLEDGE_BASE.md                 Technical baseline & working state
+├─ MILESTONES.md                     Version plan, exit criteria, hardware roadmap
+├─ AIRCRAFT_CONTROLS_RESEARCH.md     Real aircraft control feel research
+├─ FAILED_EXPERIMENTS.md             Dead ends (PID auto-tuning, RB command, …)
+├─ USB_STABILITY_ISSUE.md            USB bandwidth/CDC congestion fix
+├─ architecture/                     System design, build procedures, hardware
+├─ ci/                               CI workflows, scripts, device detection
+├─ testing/                          Test plans, results, device testing guide
+├─ tuning/                           SimpleFOC PID tuning guides
+└─ sessions/                         Session logs (pre-v0.1-rc, historical)
 ```
 
 ---
