@@ -6,7 +6,7 @@ Requirements are tracked in [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ---
 
-## v0.1 — "It Works" ✅ RELEASING
+## v0.1 — "It Works" ✅ RELEASED
 
 Motor on breadboard: detent clicks, endstops, multi-revolution, HID joystick.
 
@@ -18,7 +18,10 @@ Motor on breadboard: detent clicks, endstops, multi-revolution, HID joystick.
 | USB composite: HID + MIDI + CDC serial | Done |
 | 16-bit HID axis, boot centering, dead-zone fix | Done |
 | Quality suite 7/8 pass (1 accepted) | Done |
+| Architecture debts #2, #3 resolved | Done |
+| Cessna Trim linearity & endstop test | Done |
 
+**Tag**: `v0.1`
 **Deferred to v0.2**: Windows joy.cpl validation, fast-transition overshoot tuning.
 
 ---
