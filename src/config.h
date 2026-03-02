@@ -74,6 +74,7 @@ enum ProfileId : uint8_t {
     PROFILE_A320_SPOILERS,
     PROFILE_GLIDER_TRIM,
     PROFILE_GLIDER_SPOILER,
+    PROFILE_BENCH_TEST,
     NUM_PROFILES
 };
 
@@ -189,6 +190,12 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
     { "Glider Spoiler",     2, false,  90.0f, 45.0f, 2.0f,
       0, 0.0f, GLIDER_SPOILER_DETENTS, 2, false, 0.0f,
       0x7002, "FOC - Glider Spoiler" },
+
+    // --- Bench Test ---
+    //  360° smooth travel for quality test suite (positions 0°–360°).
+    { "Bench Test",         0, false, 360.0f, 180.0f, 2.0f,
+      0, 0.0f, nullptr, 0, false, 0.0f,
+      0xFF00, "FOC - Bench Test" },
 };
 
 // ============================================================================
