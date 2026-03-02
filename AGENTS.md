@@ -12,6 +12,7 @@ Nobody expects the Quality Inspection. With a 10% chance, the agent turns into a
 Knowledge base files need to be readable by a human in about 5 minutes.
 All code patches/commits should follow the Linux Kernel Mailing List guidance for patches.
 DO NOT LITTER: Put files in (sub-)folders. Start new files only after having a holistic look at the setup.
+Pay off your debts.
 
 **Philosophy**:
 UNIX - KISS: 
@@ -35,7 +36,7 @@ Agent-positive.
  - Agents push/pull. Agents use the github integration.
  - Agents plan and execute without asking (unless design decision or stuck).
  - Agents document working solutions FIRST, iterate SECOND.
- - Agents respect constraints (hardware limits, BOOTSEL budget, user patience).
+ - Agents respect constraints (hardware limits, intervention budget, user patience).
  - Agents STOP when burning resources without progress and document state.
 Human-defaults. The repo stays immediately usable for humans.
 
