@@ -75,13 +75,15 @@ python3 test/tools/trim_wheel_test.py --json haptic_results.json
 ### Linearity Scan (manual turning)
 
 Turn the wheel slowly from endstop to endstop while the tool records
-motor angle vs. HID axis value.  Live bargraph, endstop bounceback
-measurement, final linearity grade.
+motor angle vs. HID axis value.  Curses TUI with live bargraph, endstop
+bounceback measurement, final linearity grade.
 
 ```bash
 python3 test/tools/linearity_scan.py
 python3 test/tools/linearity_scan.py --bins 60
 ```
+
+Keys: `1`–`9` jump to 0%–100%, `q` or Ctrl+C → print report.
 
 ### Unit Tests (no hardware)
 
@@ -143,15 +145,21 @@ LPF Tf=0.001, V_limit=2.0 V.
 
 ### Interactive Haptic Setup
 
-Terminal UI for adjusting haptic parameters in real time.
+Curses TUI for adjusting haptic parameters in real time.
 Keyboard controls for range, center, detent count, strength, endstop margin.
+Can export the tuned settings as a C profile struct for `config.h`, or
+save/load JSON presets.
 
 ```bash
 python3 test/tools/trim_setup.py
+python3 test/tools/trim_setup.py --preset my_feel.json
+python3 test/tools/trim_setup.py --name "My Trim Wheel"   # name for C export
 ```
 
 Keys: `r/R` range, `c/C` center, `n/N` detents, `s/S` strength,
-`m/M` margin, `e` enable toggle, `0-9` jump to detent, `q` quit.
+`m/M` margin, `e` enable toggle, `0-9` jump to detent,
+`p` **export C profile struct**, `j` save JSON preset,
+`J` load JSON preset, `q` quit.
 
 ### SimpleFOC Studio (live PID)
 
@@ -211,5 +219,6 @@ python3 test/tools/diagnostic_tuning_report.py --output report.json
 | Switch to profile 3 | `python3 test/tools/profile_monitor.py 3` |
 | Auto-tune PID | `python3 test/tools/pid_optimizer.py` |
 | Adjust haptic feel live | `python3 test/tools/trim_setup.py` |
+| Export tuned feel as C profile | press `p` in trim_setup |
 | Fix Linux dead zone | `sudo cp tools/99-foc-joystick.rules /etc/udev/rules.d/` |
 | Upload without BOOTSEL button | `python3 tools/upload_via_rb.py` |

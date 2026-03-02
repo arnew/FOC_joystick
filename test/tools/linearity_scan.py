@@ -8,7 +8,7 @@ HID axis value tracks the snap position linearly.
 
 Features:
   • Auto-detects range from firmware config (sends "W" command)
-  • Live bargraph showing coverage and per-bin linearity error
+  • Live bargraph showing coverage and per-bin linearity error (curses TUI)
   • Endstop bounceback measurement (how far HID springs back)
   • Final report with per-bin stats and overall linearity grade
 
@@ -17,10 +17,11 @@ Usage:
     python3 test/tools/linearity_scan.py --bins 60
     python3 test/tools/linearity_scan.py --port /dev/ttyACM0
 
-Ctrl+C to stop and print report.
+q or Ctrl+C → stop and print report.
 """
 
 import argparse
+import curses
 import fcntl
 import glob
 import math
@@ -31,10 +32,8 @@ import serial
 import struct
 import subprocess
 import sys
-import termios
 import threading
 import time
-import tty
 from dataclasses import dataclass, field
 
 
@@ -45,14 +44,43 @@ ABS_X = 0
 EVDEV_FMT = "llHHi"
 EVDEV_SIZE = struct.calcsize(EVDEV_FMT)
 
-# ANSI
+# ANSI — kept for _print_report() which runs after curses exits
 GREEN  = "\033[92m"
 YELLOW = "\033[93m"
 RED    = "\033[91m"
 DIM    = "\033[2m"
 BOLD   = "\033[1m"
 RESET  = "\033[0m"
-CLEAR  = "\033[2J\033[H"
+
+# Curses color pair IDs
+C_OK    = 1
+C_WARN  = 2
+C_ERROR = 3
+C_DIM   = 4
+C_TITLE = 5
+
+
+# ── Curses helpers ───────────────────────────────────────────────────
+
+def init_colors():
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(C_OK,    curses.COLOR_GREEN,  -1)
+    curses.init_pair(C_WARN,  curses.COLOR_YELLOW, -1)
+    curses.init_pair(C_ERROR, curses.COLOR_RED,    -1)
+    curses.init_pair(C_DIM,   curses.COLOR_WHITE,  -1)
+    curses.init_pair(C_TITLE, curses.COLOR_CYAN,   -1)
+
+
+def safe_addstr(win, y, x, text, attr=0):
+    """addstr that silently clips at terminal edges."""
+    h, w = win.getmaxyx()
+    if y < 0 or y >= h or x >= w:
+        return
+    try:
+        win.addnstr(y, x, text, max(0, w - x), attr)
+    except curses.error:
+        pass
 
 
 # ── Device discovery ─────────────────────────────────────────────────
@@ -63,7 +91,7 @@ def find_serial_port():
 
 
 def find_foc_evdev():
-    """Return evdev path for the FOC joystick."""
+    """Return /dev/input/eventN path for the FOC joystick, or None."""
     try:
         with open("/proc/bus/input/devices") as f:
             text = f.read()
@@ -72,43 +100,61 @@ def find_foc_evdev():
                 continue
             for line in block.splitlines():
                 if line.startswith("H: Handlers="):
-                    for tok in line.replace("=", " ").split():
+                    for tok in line.split():
                         if tok.startswith("event"):
                             return f"/dev/input/{tok}"
     except Exception:
         pass
+    # Fallback: first event device that looks like a joystick
+    for dev in sorted(glob.glob("/dev/input/event*")):
+        try:
+            fd = os.open(dev, os.O_RDONLY | os.O_NONBLOCK)
+            buf = bytearray(24)
+            fcntl.ioctl(fd, (2 << 30) | (24 << 16) | (0x45 << 8) | 0x40, buf)
+            os.close(fd)
+            return dev
+        except Exception:
+            pass
     return None
 
 
-# ── evdev helpers ────────────────────────────────────────────────────
-
-def _eviocgabs(axis):
-    """EVIOCGABS(axis) ioctl number — reads struct input_absinfo."""
-    # _IOR('E', 0x40+axis, 24)  — 24 = sizeof(struct input_absinfo)
-    return (2 << 30) | (24 << 16) | (0x45 << 8) | (0x40 + axis)
-
-
 def read_absinfo(fd, axis):
-    """Read initial absinfo via ioctl.  Returns (value, min, max, fuzz, flat)."""
+    """Read struct input_absinfo for an axis: (value, min, max, fuzz, flat)."""
+    ioctl_num = (2 << 30) | (24 << 16) | (0x45 << 8) | (0x40 + axis)
     buf = bytearray(24)
-    fcntl.ioctl(fd, _eviocgabs(axis), buf)
+    fcntl.ioctl(fd, ioctl_num, buf)
     value, mn, mx, fuzz, flat, _res = struct.unpack("iiiiii", buf)
     return value, mn, mx, fuzz, flat
 
 
 def fix_evdev_deadzone(evdev_path):
-    """Zero fuzz/flat on the evdev device (no root needed)."""
+    """Zero flat/fuzz via evdev-joystick and jscal."""
     try:
         for param in ["deadzone", "fuzz"]:
             subprocess.run(
                 ["evdev-joystick", "--evdev", evdev_path, f"--{param}", "0"],
                 capture_output=True, timeout=5)
-        return True
     except FileNotFoundError:
-        return False
+        pass
+    # Also try jscal on the js device
+    try:
+        with open("/proc/bus/input/devices") as f:
+            text = f.read()
+        for block in text.split("\n\n"):
+            if os.path.basename(evdev_path) in block:
+                for line in block.splitlines():
+                    if "Handlers=" in line:
+                        for tok in line.split():
+                            if tok.startswith("js"):
+                                js = f"/dev/input/{tok}"
+                                subprocess.run(
+                                    ["jscal", "-s", "2,0,0,0,0", js],
+                                    capture_output=True, timeout=5)
+    except Exception:
+        pass
 
 
-# ── Data structures ──────────────────────────────────────────────────
+# ── Data classes ─────────────────────────────────────────────────────
 
 @dataclass
 class Sample:
@@ -121,7 +167,6 @@ class Sample:
 
 @dataclass
 class Bin:
-    """Accumulator for one range slice."""
     hid_sum:   float = 0.0
     motor_sum: float = 0.0
     snap_sum:  float = 0.0
@@ -148,9 +193,8 @@ class Bin:
 
 @dataclass
 class EndstopEvent:
-    """One endstop approach + release observation."""
-    hit_hid:     int        # HID value when endstop was reached
-    bounce_hid:  int        # HID value after release/settle
+    hit_hid:     int
+    bounce_hid:  int
     hit_snap:    float
     bounce_snap: float
     timestamp:   float
@@ -166,10 +210,10 @@ class LinearityScan:
         self.evdev_path = evdev_path or find_foc_evdev()
 
         # Firmware config (populated by _query_config)
-        self.range_deg  = None   # total travel
+        self.range_deg  = None
         self.center_deg = None
-        self.range_min  = None   # center - range/2
-        self.range_max  = None   # center + range/2
+        self.range_min  = None
+        self.range_max  = None
         self.detent_count = None
         self.profile_name = None
 
@@ -242,11 +286,9 @@ class LinearityScan:
             if m:
                 self.range_min = float(m.group(1))
                 self.range_max = float(m.group(2))
-            # Also look for profile name in boot messages
             if "Profile" in line and ":" in line:
                 self.profile_name = line.split(":", 1)[-1].strip()
 
-        # Derive min/max if we got range + center but not the explicit range line
         if self.range_deg and self.center_deg and self.range_min is None:
             self.range_min = self.center_deg - self.range_deg / 2
             self.range_max = self.center_deg + self.range_deg / 2
@@ -254,7 +296,7 @@ class LinearityScan:
         if self.range_min is not None:
             return True
 
-        print("✗ Could not read config from firmware (send 'W' manually to check)")
+        print("✗ Could not read config from firmware (send 'W' manually)")
         return False
 
     # ── Reader threads ───────────────────────────────────────────
@@ -285,25 +327,19 @@ class LinearityScan:
         try:
             fd = os.open(self.evdev_path, os.O_RDONLY | os.O_NONBLOCK)
         except OSError as e:
-            print(f"Cannot open {self.evdev_path}: {e}")
             return
 
-        # Read initial absinfo (value + check fuzz/flat)
         try:
             value, mn, mx, fuzz, flat = read_absinfo(fd, ABS_X)
             self.hid_value = value
             if fuzz > 0 or flat > 0:
                 os.close(fd)
-                print(f"  [evdev] fuzz={fuzz} flat={flat} — fixing...")
                 fix_evdev_deadzone(self.evdev_path)
                 fd = os.open(self.evdev_path, os.O_RDONLY | os.O_NONBLOCK)
                 value, _, _, fuzz, flat = read_absinfo(fd, ABS_X)
                 self.hid_value = value
-                if fuzz > 0 or flat > 0:
-                    print(f"  [evdev] WARNING: fuzz={fuzz}/flat={flat} "
-                          f"still nonzero — install 'joystick' package")
-        except Exception as e:
-            print(f"  [evdev] absinfo read failed: {e}")
+        except Exception:
+            pass
 
         try:
             while not self._stop.is_set():
@@ -344,13 +380,12 @@ class LinearityScan:
         frac = (self.snap_deg - self.range_min) / span
         idx  = max(0, min(int(frac * self.num_bins), self.num_bins - 1))
 
-        # Only record if bin changed or >50ms since last sample in same bin
         if idx != self.last_bin_idx or self.bins[idx].count == 0:
             self.bins[idx].add(s)
             self.sample_count += 1
             self.last_bin_idx = idx
 
-        # ── Endstop bounceback detection ─────────────────────────
+        # Endstop bounceback detection
         near_lo = (self.snap_deg - self.range_min) < span * 0.01
         near_hi = (self.range_max - self.snap_deg) < span * 0.01
         in_middle = not near_lo and not near_hi
@@ -359,19 +394,16 @@ class LinearityScan:
             self._at_low = True
             self._endstop_hid  = self.hid_value
             self._endstop_snap = self.snap_deg
-
         if near_hi and not self._at_high:
             self._at_high = True
             self._endstop_hid  = self.hid_value
             self._endstop_snap = self.snap_deg
-
         if self._at_low and in_middle:
             self.low_endstop_events.append(EndstopEvent(
                 hit_hid=self._endstop_hid, bounce_hid=self.hid_value,
                 hit_snap=self._endstop_snap, bounce_snap=self.snap_deg,
                 timestamp=time.time()))
             self._at_low = False
-
         if self._at_high and in_middle:
             self.high_endstop_events.append(EndstopEvent(
                 hit_hid=self._endstop_hid, bounce_hid=self.hid_value,
@@ -393,76 +425,119 @@ class LinearityScan:
         return self.range_min + (idx + 0.5) / self.num_bins * span
 
     def _bin_error_pct(self, idx):
-        """Linearity error for bin idx as % of full scale, or None."""
         b = self.bins[idx]
         if b.count == 0:
             return None
         expected = self._expected_hid(self._bin_center_snap(idx))
         return abs(b.mean_hid - expected) / 65535 * 100
 
-    # ── Display ──────────────────────────────────────────────────
+    # ── Curses display ───────────────────────────────────────────
 
-    def _render(self):
-        span = self.range_max - self.range_min
+    def _render_curses(self, stdscr):
+        """Draw live dashboard using curses."""
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        span = self.range_max - self.range_min if self.range_max else 1
         cur_idx = 0
         if span > 0:
-            frac = (self.snap_deg - self.range_min) / span
-            cur_idx = max(0, min(int(frac * self.num_bins), self.num_bins - 1))
+            frac = (self.snap_deg - (self.range_min or 0)) / span
+            cur_idx = max(0, min(int(frac * self.num_bins),
+                                 self.num_bins - 1))
 
         covered = sum(1 for b in self.bins if b.count > 0)
-        coverage_pct = covered / self.num_bins * 100
+        cov_pct = covered / self.num_bins * 100
 
         pct = self.hid_value / 65535 * 100
         expected = self._expected_hid(self.snap_deg)
         err = abs(self.hid_value - expected)
         err_pct = err / 65535 * 100
 
-        out = []
+        row = 0
+
+        # Title
         name = self.profile_name or "?"
-        det_info = f"{self.detent_count} detents" if self.detent_count else "smooth"
-        out.append(f"{BOLD}FOC Linearity Scanner{RESET}  —  "
-                   f"{name} ({self.range_deg:.0f}°, {det_info})")
-        out.append("═" * 66)
-        out.append("")
+        det_info = (f"{self.detent_count} detents"
+                    if self.detent_count else "smooth")
+        safe_addstr(stdscr, row, 2, "FOC Linearity Scanner",
+                    curses.color_pair(C_TITLE) | curses.A_BOLD)
+        safe_addstr(stdscr, row, 24,
+                    f"  —  {name} ({self.range_deg:.0f}°, {det_info})")
+        row += 1
+        safe_addstr(stdscr, row, 0, "═" * min(w, 66))
+        row += 2
 
         # Current position
-        out.append(
-            f"  Motor: {self.motor_deg:8.1f}°   Snap: {self.snap_deg:8.1f}°   "
-            f"Det: {self.detent:4d}   Vel: {self.velocity:5.1f}°/s")
-        out.append(
-            f"  HID:   {self.hid_value:5d}/65535 ({pct:5.1f}%)   "
-            f"Expected: {expected:5d}   Error: {err:4d} ({err_pct:.2f}%)")
-        out.append("")
+        safe_addstr(stdscr, row, 2,
+                    f"Motor: {self.motor_deg:8.1f}°   "
+                    f"Snap: {self.snap_deg:8.1f}°   "
+                    f"Det: {self.detent:4d}   "
+                    f"Vel: {self.velocity:5.1f}°/s")
+        row += 1
+        safe_addstr(stdscr, row, 2,
+                    f"HID:   {self.hid_value:5d}/65535 ({pct:5.1f}%)   "
+                    f"Expected: {expected:5d}   "
+                    f"Error: {err:4d} ({err_pct:.2f}%)")
+        row += 2
 
         # Coverage bargraph
-        bar = ""
-        for i in range(self.num_bins):
+        safe_addstr(stdscr, row, 2, "Range: ")
+        bx = 9
+        for i in range(min(self.num_bins, w - bx - 8)):
             if i == cur_idx:
-                bar += f"{BOLD}▼{RESET}"
+                safe_addstr(stdscr, row, bx + i, "▼",
+                            curses.A_BOLD)
             elif self.bins[i].count > 0:
                 e = self._bin_error_pct(i)
                 if e is None or e < 0.5:
-                    bar += f"{GREEN}█{RESET}"
+                    safe_addstr(stdscr, row, bx + i, "█",
+                                curses.color_pair(C_OK))
                 elif e < 2.0:
-                    bar += f"{YELLOW}▓{RESET}"
+                    safe_addstr(stdscr, row, bx + i, "▓",
+                                curses.color_pair(C_WARN))
                 else:
-                    bar += f"{RED}▓{RESET}"
+                    safe_addstr(stdscr, row, bx + i, "▓",
+                                curses.color_pair(C_ERROR))
             else:
-                bar += f"{DIM}░{RESET}"
+                safe_addstr(stdscr, row, bx + i, "░",
+                            curses.color_pair(C_DIM))
+        row += 1
 
-        out.append(f"  Range: {bar}")
-        out.append(f"         {self.range_min:.0f}°"
-                   f"{'':>{self.num_bins - 12}}  "
-                   f"{self.range_max:.0f}°")
-        out.append(f"  Coverage: {covered}/{self.num_bins} bins "
-                   f"({coverage_pct:.0f}%)   "
-                   f"Samples: {self.sample_count}")
-        out.append(f"  {GREEN}█{RESET}<0.5%  "
-                   f"{YELLOW}▓{RESET}0.5-2%  "
-                   f"{RED}▓{RESET}>2%  "
-                   f"{DIM}░{RESET}uncovered  "
-                   f"{BOLD}▼{RESET}current")
-        out.append("")
+        rmin = self.range_min or 0
+        rmax = self.range_max or 360
+        safe_addstr(stdscr, row, 9, f"{rmin:.0f}°")
+        gap = max(0, self.num_bins - 6)
+        safe_addstr(stdscr, row, 9 + gap, f"{rmax:.0f}°")
+        row += 1
+
+        safe_addstr(stdscr, row, 2,
+                    f"Coverage: {covered}/{self.num_bins} bins "
+                    f"({cov_pct:.0f}%)   "
+                    f"Samples: {self.sample_count}")
+        row += 1
+
+        # Legend
+        lx = 2
+        safe_addstr(stdscr, row, lx, "█", curses.color_pair(C_OK))
+        lx += 1
+        safe_addstr(stdscr, row, lx, "<0.5%  ")
+        lx += 7
+        safe_addstr(stdscr, row, lx, "▓", curses.color_pair(C_WARN))
+        lx += 1
+        safe_addstr(stdscr, row, lx, "0.5-2%  ")
+        lx += 8
+        safe_addstr(stdscr, row, lx, "▓", curses.color_pair(C_ERROR))
+        lx += 1
+        safe_addstr(stdscr, row, lx, ">2%  ")
+        lx += 5
+        safe_addstr(stdscr, row, lx, "░", curses.color_pair(C_DIM))
+        lx += 1
+        safe_addstr(stdscr, row, lx, "uncov  ")
+        lx += 7
+        safe_addstr(stdscr, row, lx, "▼", curses.A_BOLD)
+        lx += 1
+        safe_addstr(stdscr, row, lx, "current")
+        row += 2
 
         # Worst bins
         errors = [(i, self._bin_error_pct(i))
@@ -471,43 +546,50 @@ class LinearityScan:
         if errors:
             worst = sorted(errors, key=lambda x: -x[1])[:3]
             if worst[0][1] > 0.5:
-                out.append("  Worst bins:")
+                safe_addstr(stdscr, row, 2, "Worst bins:")
+                row += 1
                 for i, e in worst:
                     if e < 0.1:
                         break
-                    snap_c = self._bin_center_snap(i)
-                    out.append(f"    bin {i:2d} (~{snap_c:6.0f}°): "
-                               f"error {e:.2f}%  "
-                               f"(HID avg={self.bins[i].mean_hid:.0f} "
-                               f"exp={self._expected_hid(snap_c)})")
-                out.append("")
+                    sc = self._bin_center_snap(i)
+                    safe_addstr(stdscr, row, 4,
+                                f"bin {i:2d} (~{sc:6.0f}°): "
+                                f"error {e:.2f}%  "
+                                f"(avg={self.bins[i].mean_hid:.0f} "
+                                f"exp={self._expected_hid(sc)})")
+                    row += 1
+                row += 1
 
         # Endstop summary
         if self.low_endstop_events or self.high_endstop_events:
-            out.append("  Endstop bounceback:")
-            if self.low_endstop_events:
-                ev = self.low_endstop_events[-1]
-                delta_hid = abs(ev.bounce_hid - ev.hit_hid)
-                delta_deg = abs(ev.bounce_snap - ev.hit_snap)
-                out.append(f"    Low:  hit HID={ev.hit_hid:5d}  "
-                           f"settled HID={ev.bounce_hid:5d}  "
-                           f"bounce={delta_hid} ({delta_deg:.1f}°)")
-            if self.high_endstop_events:
-                ev = self.high_endstop_events[-1]
-                delta_hid = abs(ev.bounce_hid - ev.hit_hid)
-                delta_deg = abs(ev.bounce_snap - ev.hit_snap)
-                out.append(f"    High: hit HID={ev.hit_hid:5d}  "
-                           f"settled HID={ev.bounce_hid:5d}  "
-                           f"bounce={delta_hid} ({delta_deg:.1f}°)")
-            out.append("")
+            safe_addstr(stdscr, row, 2, "Endstop bounceback:")
+            row += 1
+            for label, events in [("Low ", self.low_endstop_events),
+                                  ("High", self.high_endstop_events)]:
+                if events:
+                    ev = events[-1]
+                    dh = abs(ev.bounce_hid - ev.hit_hid)
+                    dd = abs(ev.bounce_snap - ev.hit_snap)
+                    safe_addstr(stdscr, row, 4,
+                                f"{label}: hit={ev.hit_hid:5d}  "
+                                f"settled={ev.bounce_hid:5d}  "
+                                f"bounce={dh} ({dd:.1f}°)")
+                    row += 1
+            row += 1
 
-        out.append("  Keys: 1-9 jump to 0%–100%  |  Turn wheel for coverage  |  Ctrl+C for report")
-        print(CLEAR + "\n".join(out), flush=True)
+        # Controls
+        safe_addstr(stdscr, row, 2,
+                    "1-9 jump to position  |  Turn wheel slowly  |  "
+                    "q / Ctrl+C → report",
+                    curses.color_pair(C_DIM))
 
-    # ── Report ───────────────────────────────────────────────────
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+    # ── Report (prints to normal terminal after curses exits) ────
 
     def _print_report(self):
-        span = self.range_max - self.range_min
+        span = (self.range_max or 0) - (self.range_min or 0)
         covered = sum(1 for b in self.bins if b.count > 0)
         coverage_pct = covered / self.num_bins * 100
 
@@ -536,12 +618,12 @@ class LinearityScan:
 
         # Linearity grade
         if errors:
-            grade = "EXCELLENT" if max_err < 0.5 else \
-                    "GOOD"      if max_err < 1.0 else \
-                    "FAIR"      if max_err < 2.0 else \
-                    "POOR"      if max_err < 5.0 else "FAIL"
-            color = GREEN if max_err < 1.0 else \
-                    YELLOW if max_err < 2.0 else RED
+            grade = ("EXCELLENT" if max_err < 0.5 else
+                     "GOOD"      if max_err < 1.0 else
+                     "FAIR"      if max_err < 2.0 else
+                     "POOR"      if max_err < 5.0 else "FAIL")
+            color = (GREEN if max_err < 1.0 else
+                     YELLOW if max_err < 2.0 else RED)
             print(f"  Linearity: {color}{grade}{RESET}  "
                   f"(mean={mean_err:.3f}%  max={max_err:.3f}%)")
         else:
@@ -564,9 +646,9 @@ class LinearityScan:
                       f"{DIM}░{RESET}")
                 continue
             e = self._bin_error_pct(i)
-            mark = f"{GREEN}✓{RESET}" if e < 0.5 else \
-                   f"{YELLOW}~{RESET}" if e < 2.0 else \
-                   f"{RED}✗{RESET}"
+            mark = (f"{GREEN}✓{RESET}" if e < 0.5 else
+                    f"{YELLOW}~{RESET}" if e < 2.0 else
+                    f"{RED}✗{RESET}")
             print(f"  {i:4d}  {snap_c:8.1f}  {exp_hid:6d}  "
                   f"{b.mean_hid:6.0f}  {e:5.2f}%  {b.count:4d}  {mark}")
 
@@ -601,17 +683,36 @@ class LinearityScan:
     # ── Jump-to-position ─────────────────────────────────────────
 
     def _jump_to(self, key_num):
-        """Jump motor to position for key 1-9 (1=0%, 5=50%, 9=100%)."""
+        """Jump motor to key_num/8 of range (1=0%, 5=50%, 9=100%)."""
         if self.range_min is None or self.range_max is None:
             return
         frac = (key_num - 1) / 8.0
-        target_deg = self.range_min + frac * (self.range_max - self.range_min)
+        target = self.range_min + frac * (self.range_max - self.range_min)
         try:
-            self._ser.write(f"T{target_deg:.1f}\n".encode())
+            self._ser.write(f"T{target:.1f}\n".encode())
         except Exception:
             pass
 
     # ── Main loop ────────────────────────────────────────────────
+
+    def _tui_loop(self, stdscr):
+        """Curses main loop — called by curses.wrapper()."""
+        curses.curs_set(0)
+        stdscr.nodelay(True)
+        stdscr.timeout(150)
+        init_colors()
+
+        while not self._stop.is_set():
+            key = stdscr.getch()
+            if key == 3 or key == ord('q'):         # Ctrl+C or q
+                break
+            if key == curses.KEY_RESIZE:
+                stdscr.clear()
+            elif 0 < key < 256 and chr(key) in '123456789':
+                self._jump_to(int(chr(key)))
+
+            self._record()
+            self._render_curses(stdscr)
 
     def run(self):
         self._check_prerequisites()
@@ -623,14 +724,14 @@ class LinearityScan:
         if not self._query_config():
             sys.exit(1)
 
-        print(f"  range_deg={self.range_deg}  center_deg={self.center_deg}")
-        print(f"  angle range: {self.range_min}° .. {self.range_max}°")
+        print(f"  range={self.range_deg}°  center={self.center_deg}°")
+        print(f"  angle: {self.range_min}° .. {self.range_max}°")
         if self.detent_count:
             print(f"  detents={self.detent_count}  "
                   f"step={self.range_deg/self.detent_count:.1f}°")
         print()
 
-        # Start readers
+        # Start reader threads before curses takes over
         serial_t = threading.Thread(target=self._serial_reader, daemon=True)
         evdev_t  = threading.Thread(target=self._evdev_reader,  daemon=True)
         serial_t.start()
@@ -641,29 +742,16 @@ class LinearityScan:
         while not self._serial_alive and time.time() - t0 < 5:
             time.sleep(0.1)
         if not self._serial_alive:
-            print("✗ No HAPTIC_DIAG telemetry — is haptic enabled?  (send WE1)")
+            print("✗ No HAPTIC_DIAG telemetry — is haptic enabled? (WE1)")
             self._stop.set()
             sys.exit(1)
 
-        # Set terminal to raw mode for non-blocking keypress reading
-        old_termios = termios.tcgetattr(sys.stdin)
+        # Run curses TUI; report prints after it exits
         try:
-            tty.setcbreak(sys.stdin.fileno())
-            while not self._stop.is_set():
-                # Check for keypress (non-blocking via select)
-                r, _, _ = select.select([sys.stdin], [], [], 0.15)
-                if r:
-                    ch = sys.stdin.read(1)
-                    if ch == '\x03':        # Ctrl+C
-                        break
-                    if ch in '123456789':
-                        self._jump_to(int(ch))
-                self._record()
-                self._render()
+            curses.wrapper(self._tui_loop)
         except KeyboardInterrupt:
             pass
         finally:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_termios)
             self._stop.set()
             self._print_report()
 
