@@ -34,9 +34,16 @@ Physical trim wheel for MSFS elevator trim. First version a human uses.
 | Windows HID joy.cpl validation (carried F-1.2) | MUST |
 | MSFS axis assignment → fly Cessna 172 | MUST |
 | Fast transitions tuning <10° overshoot (carried F-1.5) | SHOULD |
+| Per-hardware motor config (MotorConfig separate from ControlProfile) | SHOULD |
 | Thermal soak: 1-hour flight OK | SHOULD |
 
 **Entry**: v0.1 released, Windows PC available, 3D printer available.
+
+**Design note**: PID gains are global (#defines in pid_config.h). The I-term
+(I=0.2) helps hold precision on trim wheels but "kills the fun" on throttle-
+type controls. v0.2 should separate motor/hardware parameters (PID, voltage
+limit, pole pairs) from profile parameters (haptic, range, detents). See
+ARCHITECTURE.md § Architecture Debts for the MotorConfig/ControlProfile split.
 
 ---
 
@@ -78,3 +85,5 @@ Companion app closes the loop: sim → motor (autopilot trim moves wheel).
 - More aircraft profiles
 - Thermal management (voltage backoff)
 - Interchangeable knob system (D-shaft)
+- Per-profile PID hints (e.g. I=0 for smooth throttles, higher I for detented controls)
+- EEPROM motor config persistence (auto-detect or manually select hardware profile)

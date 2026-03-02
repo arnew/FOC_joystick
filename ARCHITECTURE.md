@@ -1,281 +1,282 @@
-# Architecture
+# Architecture — FOC Joystick Controller
 
-USB HID joystick with BLDC motor haptic feedback, controlled by SimpleFOC,
-running on RP2040.  MIDI input from a flight-sim companion app positions the
-motor; the user pushes back through detent clicks; HID output reports the
-result to the simulator.
+## System Overview
 
-## System Context
+A USB composite device: HID joystick + MIDI input + CDC serial.
+One BLDC motor with a magnetic angle sensor provides force-feedback
+haptic detents for flight simulator controls.
 
 ```
-  Flight Simulator  ◄──── HID joystick (axis position) ────┐
-        │                                                    │
-        ▼                                                    │
-  Companion App ──── MIDI CC (target position) ────►  RP2040 Firmware
-                                                       │    ▲
-                                                       │    │
-  Test/Tuning Host ── Commander serial ───────────────►│    │
-                   ◄── Telemetry @T lines ─────────────┘    │
-                                                            │
-                                              User Hand ────┘
-                                           (pushes motor shaft)
+  ┌─────────────┐     USB HID      ┌────────────────┐
+  │  RP2040      │ ◄──────────────► │ Flight Sim     │
+  │  + AS5600    │     USB MIDI     │ (MSFS, X-Plane)│
+  │  + BLDC 7pp  │ ◄──────────────► │                │
+  │              │     CDC serial   │ Host tools     │
+  │              │ ◄──────────────► │ (tuning, test) │
+  └─────────────┘                   └────────────────┘
 ```
 
-Four external actors:
+**Hardware**: RP2040 (Raspberry Pi Pico), AS5600 I2C magnetic encoder,
+BLDC motor (7 pole pairs), 3-PWM driver (pins 13/12/11/10).
 
-| Actor | Interface | Direction | Semantics |
-|-------|-----------|-----------|-----------|
-| **Simulator** | MIDI CC | In | "Move this axis to position X" |
-| **User hand** | Motor shaft | In | Physical push detected as position deviation |
-| **Flight sim** | USB HID | Out | "Axis is now at position Y" |
-| **Test host** | CDC serial | In/Out | Commander commands in, telemetry out |
+**Stack**: PlatformIO, earlephilhower Arduino core, SimpleFOC v2.4.0,
+TinyUSB (composite HID+MIDI+CDC), MIDI library.
+
+
+## Source Tree
+
+```
+include/
+  pid_config.h              PID gains & limits (compile-time #defines)
+  my_tusb_config.h          TinyUSB endpoint/descriptor configuration
+
+src/
+  config.h                  ControlProfile struct, 11 profiles, detent maps
+  main.cpp                  setup(), loop(), rate scheduling
+  motor_control.cpp/h       SimpleFOC init, FOC loop, target/angle accessors
+  haptic_layer.cpp/h        Observe/snap/set detent engine (v2)
+  profile_manager.cpp/h     EEPROM persistence, USB identity from profile
+
+  input/
+    commander_integration   Serial Commander: M T A W commands
+    midi_handler            MIDI CC → position, CC#121 → profile switch
+
+  output/
+    usb_hid                 TinyUSB HID joystick (16-bit axes, 8 buttons)
+    telemetry               @T structured output, ring buffer, EMA RMS
+```
+
 
 ## Layered Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Layer 4: Outputs                                            │
-│   usb_hid          HID joystick report (50 Hz)             │
-│   telemetry        @T observation lines (10 Hz)            │
-│   statistics       Diagnostic counters                      │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 3: Inputs                                             │
-│   midi_handler     MIDI CC → position request               │
-│   commander        Serial commands (T, M, A, S, W)          │
-│   (user hand)      Detected by Layer 2 as position delta    │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 2: Position Arbiter                                   │
-│   haptic_layer     Detent snapping, endstop clamping,       │
-│                    deadband filtering, delta tracking        │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 1: Motor Control                                      │
-│   motor_control    SimpleFOC FOC loop, PID, idle mgmt       │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 0: Hardware                                           │
-│   AS5600 I²C encoder, 7pp BLDC, 3PWM driver, RP2040        │
-└─────────────────────────────────────────────────────────────┘
+Layer 0  Hardware      AS5600 sensor, BLDC driver, RP2040 peripherals
+Layer 1  Motor         SimpleFOC angle-mode PID → motor.move(target)
+Layer 2  Haptic        Observe actual → snap to detent → set target
+Layer 3  Input         MIDI CC handler, Serial Commander (M/T/A/W)
+Layer 4  Output        USB HID reports, @T telemetry lines
+Cross    Config        ControlProfile table, profile persistence
 ```
 
-**Rule: data flows down.** Inputs (Layer 3) never write to the motor
-directly.  Every position command flows through the haptic layer (Layer 2)
-when it is enabled.  The haptic layer is the sole owner of `target_angle[]`
-during haptic operation.
+**Rule**: only Layer 1 (`update_motor`) calls `motor.move()`.
+Everything else sets targets via `set_motor_target()`.
+Layer 2 reads actual angle via `get_motor_angle()`.
 
-## Data Flow: Who Sets the Motor Target
 
-The motor holds exactly one target angle at any time.  The question is
-always: who set it, and did it go through the right path?
+## Main Loop — Execution Order
 
-### When haptic is enabled (normal operation)
-
-```
-  MIDI CC ──────────┐
-  Commander T ──────┤
-  (user pushes) ────┤
-                    ▼
-              haptic_layer
-              ├─ Snap to nearest detent
-              ├─ Clamp to endstops
-              └─ set_motor_target()
-                    │
-                    ▼
-              motor_control
-              └─ motor.move(target_angle)
+```cpp
+void loop() {
+  update_motor();          // 1. FOC control (~1kHz)
+  telemetry_update();      // 2. Feed ring buffer
+  haptic_update();         // 3. Observe → snap → set target
+  service_midi_input();    // 4. Bounded MIDI burst (≤8 CC, ≤500µs)
+  update_commander();      // 5. Serial commands
+  service_hid_output();    // 6. HID report at 50Hz
+  telemetry_output();      // 7. @T line at 10Hz
+}
 ```
 
-All position commands call `haptic_set_position()`.  User physical
-interaction is detected inside `haptic_update()` as a delta between the
-expected motor position and the actual shaft angle (read from AS5600).
+All timing is cooperative — no interrupts, no RTOS.
 
-### When haptic is disabled (free positioning)
+
+## Motor Control (Layer 1)
+
+SimpleFOC angle mode, unbounded (−∞ to +∞ radians).
+
+| Parameter         | Value | Source          |
+|-------------------|-------|-----------------|
+| Angle P           | 16.0  | pid_config.h    |
+| Angle I           | 0.2   | pid_config.h    |
+| Angle D           | 1.0   | pid_config.h    |
+| Velocity P        | 0.1   | pid_config.h    |
+| Velocity I        | 0.5   | pid_config.h    |
+| Voltage limit     | 2.0V  | Thermal ceiling |
+| Velocity limit    | 4.0   | Overshoot cap   |
+| LPF Tf            | 0.001 | Phase-lag min   |
+
+PID gains are **global** — all 11 profiles share the same motor tuning.
+This is a known limitation; see *Architecture Debts* below.
+
+Integral reset: `reset_motor_pid_integral()` zeroes I-term accumulators
+on detent transitions to prevent wind-up.
+
+Boot centering: `center_motor_to()` offsets the sensor reference frame
+so the profile's `center_deg` maps to the motor's current physical
+position.  The shaft does not move.
+
+
+## Haptic Layer (Layer 2)
+
+**v2 architecture**: observe / snap / set.
+
+1. Read actual shaft angle from motor
+2. Find nearest detent (or gate capture zone)
+3. Set motor target to that detent's angle
+
+The haptic layer does NOT touch PID parameters.
+It only decides WHAT target the motor holds.
+
+### Detent Modes
+
+| Mode     | Description                | Example              |
+|----------|----------------------------|----------------------|
+| Uniform  | N evenly-spaced clicks     | Cessna Trim (18)     |
+| Map      | Arbitrary positions 0–100% | Cessna Flaps (5 pos) |
+| Gate     | Snap only near detents     | A320 Throttle (6)    |
+| Smooth   | detent_count=0, no snapping| Cessna Throttle      |
+
+### HapticConfig Fields
 
 ```
-  MIDI CC ──────────┐
-  Commander T ──────┤
-                    ▼
-              set_motor_target()
-                    │
-                    ▼
-              motor_control
-              └─ motor.move(target_angle)
+range_deg, center_deg, detent_count, detent_strength,
+endstop_margin, enabled, detent_map, detent_map_size,
+gate_mode, gate_capture_deg
 ```
 
-No detent snapping.  Motor moves to the exact commanded angle.
+All adjustable at runtime via Commander `W` commands:
+`WE` enable, `WR` range, `WC` center, `WN` count,
+`WS` strength, `WM` margin.
 
-### When user pushes with haptic enabled
 
-This is the most interesting path — it closes the human-in-the-loop:
+## Profile System
 
-1. Motor holds detent N (PID maintains target angle)
-2. User pushes shaft → shaft angle deviates from target
-3. `haptic_update()` detects delta > deadband (3°)
-4. Haptic layer moves target to detent N±1
-5. Motor PID drives shaft to new detent
-6. User feels a "click" as the motor snaps into place
-7. HID reports the new detent position to the simulator
+11 control profiles defined in `config.h` as `ALL_PROFILES[]`:
 
-The deadband prevents PID settling noise from being misread as user input.
+| # | Profile         | MIDI CC | Range° | Detents    | Gate |
+|---|-----------------|---------|--------|------------|------|
+| 0 | Cessna Trim     | 1       | 360    | 18 uniform | no   |
+| 1 | Cessna Throttle | 2       | 180    | smooth     | no   |
+| 2 | Cessna Flaps    | 3       | 120    | 5 map      | no   |
+| 3 | Cessna Gear     | 4       | 90     | 2 map      | no   |
+| 4 | A320 Trim       | 5       | 180    | 24 uniform | no   |
+| 5 | A320 Throttle   | 6       | 120    | 6 map      | yes  |
+| 6 | A320 Flaps      | 7       | 90     | 5 map      | no   |
+| 7 | A320 Spoilers   | 8       | 90     | 3 map      | no   |
+| 8 | Glider Trim     | 9       | 360    | 24 uniform | no   |
+| 9 | Glider Spoiler  | 10      | 90     | 2 map      | no   |
+|10 | Bench Test      | 11      | 360    | 36 uniform | no   |
 
-## Module Responsibilities
+Queryable from the device: `A` lists all profiles, `A3` switches.
 
-### motor_control — Layer 1
+Each profile also defines `usb_pid` and `usb_product` so the device
+re-enumerates with a profile-specific USB identity after switching.
+Profile index is persisted to EEPROM.  Switching triggers a reboot.
 
-**Owns**: `target_angle[]`, `current_angle[]`, SimpleFOC motor objects.
+### ControlProfile Struct
 
-Single point of motor actuation: only `update_motor()` calls
-`motor->move()`.  All other code sets targets via `set_motor_target()`.
+```cpp
+struct ControlProfile {
+    const char* name;
+    uint8_t     midi_cc;
+    bool        reversed;           // invert HID axis
+    float       range_deg;
+    float       center_deg;
+    float       endstop_margin;
+    uint16_t    detent_count;       // uniform clicks (0 = smooth)
+    float       detent_strength;
+    const DetentPoint* detent_map;  // custom map (nullptr = uniform)
+    uint8_t     detent_map_size;
+    bool        gate_mode;
+    float       gate_capture_deg;
+    uint16_t    usb_pid;
+    const char* usb_product;
+};
+```
 
-Idle management: reduces `voltage_limit` when motor is at rest to prevent
-heat buildup.  Must keep torque active when haptic is enabled (detents need
-holding force).
 
-### haptic_layer — Layer 2
+## Communication Interfaces
 
-**Owns**: detent state, snapped position, endstop enforcement.
+### USB HID (Layer 4)
 
-Delta-tracking pattern: reads `get_motor_angle()`, computes delta from
-expected position, applies deadband, accumulates intentional push, snaps
-to nearest detent, calls `set_motor_target()`.
-
-Resync mechanism: when an external command (MIDI, Commander) calls
-`haptic_set_position()`, the layer resets its delta tracker to avoid
-interpreting the resulting motor movement as user input.
-
-Produces `haptic_get_hid_value()` — the HID axis value derived from the
-detent position within the configured range, independent of raw motor angle.
-
-### midi_handler — Layer 3
-
-Parses 3-byte MIDI CC messages.  Maps CC number to axis via profile config,
-converts CC value (0–127) to angle.  Routes through haptic layer when
-enabled.  CC#121 triggers profile switching.
-
-### commander_integration — Layer 3
-
-SimpleFOC Commander serial interface.  Commands:
-- **M**: Direct motor PID tuning (SimpleFOC native)
-- **T**: Set target — routes through haptic when enabled
-- **A**: Switch aircraft profile (triggers reboot for USB re-enum)
-- **S**: Print statistics snapshot
-- **W**: Haptic layer configuration
-
-### usb_hid — Layer 4
-
-TinyUSB HID joystick: 8 buttons, 2 axes (X/Y), 10-bit (0–1023).
-Reports only on value change (avoids USB bus saturation).
+16-bit axes (0–65535), 8 buttons.  Reports sent at 50 Hz, only on change.
 
 HID value source:
-- Haptic enabled → `haptic_get_hid_value()` (maps detent position to 0–1023)
-- Haptic disabled → `angle_to_joystick_value()` (maps raw motor angle to 0–1023)
+- Haptic enabled → `haptic_get_hid_value()` (detent position mapped)
+- Haptic disabled → `angle_to_joystick_value()` (raw motor angle mapped)
 
-### telemetry — Layer 4
+Axis reversal applied from `ControlProfile::reversed`.
 
-Device-side rolling statistics (500-sample ring buffer).  Emits structured
-`@T` lines at 10 Hz over CDC serial.  Format:
+### USB MIDI (Layer 3)
 
+Receives standard MIDI CC messages (3 bytes).
+- Profile's `midi_cc` → position command (0–127 → 0–100% of range)
+- CC#121 → profile switch
+
+Routes through haptic layer when enabled.
+
+### Serial Commander (Layer 3)
+
+SimpleFOC Commander over CDC serial:
+
+| Cmd | Function                                        |
+|-----|-------------------------------------------------|
+| M   | Motor PID tuning (MAP/MAI/MAD/MVP/MVI/MAL/MAF) |
+| T   | Set target in degrees (routes through haptic)   |
+| A   | List profiles / switch (`A`, `A3`)              |
+| W   | Haptic config (WE/WR/WC/WN/WS/WM)              |
+
+### Telemetry (Layer 4)
+
+Structured `@T` lines at 10 Hz over CDC serial:
 ```
-@T ms,target_rad,actual_rad,error_rad,variance,settled
-```
-
-Purely observational — never influences motor control.  Host-side test
-scripts parse these lines for automated quality assertions.
-
-### config / profile_manager — Cross-cutting
-
-Static profile data (MotorProfile, AxisProfile, ProfileMetadata) defined in
-`config.h`.  Runtime profile switching (EEPROM persistence, USB identity
-reconfiguration) in `profile_manager`.
-
-Aircraft profiles: Cessna, Airbus A320, Glider — each defines axes with
-MIDI CC mappings, motor limits, and HID output scaling.
-
-### statistics — Layer 4
-
-Counters for loop timing, motor hold quality, message rates, uptime.
-Read-only diagnostic aid, no control influence.
-
-## Physical Model
-
-The motor operates in SimpleFOC **angle mode** — the PID acts as a virtual
-torsion spring pulling the shaft toward `target_angle`.
-
-```
-  Motor physics:  τ_motor = PID(target − actual)
-  User force:     τ_user  = hand push on shaft
-  Net torque:     τ_net   = τ_motor + τ_user
-  Result:         shaft moves toward equilibrium
+@T <ms>,<target>,<actual>,<error>,<rms>,<variance>,<settled>
 ```
 
-When the user pushes hard enough to overcome PID holding torque, the shaft
-deviates from target.  The haptic layer detects this deviation and decides
-whether to move the target (switch detents) or resist (endstop clamping).
+Ring buffer (0.5s, ~500 samples) for variance + settle detection.
+EMA filter (τ ≈ 200ms) for O(1) RMS.  Read-only — never influences
+motor control.
 
-**Thermal constraint**: The motor's voltage limit (2.0V) is the thermal
-ceiling.  The idle timeout exists to prevent heat buildup when no interaction
-is happening.  When haptic is active, the motor must maintain holding torque
-indefinitely — this is acceptable because detent holding current is low
-(shaft at rest, small correction torques only).
 
-## Build Configurations
+## Build
 
-| PlatformIO env | Motor mode | Haptic | Notes |
-|----------------|-----------|--------|-------|
-| `pico_1motor_endless` | Endless (0–2π) | Runtime | Default, tested |
-| `pico_1motor_limited` | Limited (0–π) | Runtime | Clamped range |
-| `pico_trim_preview` | Endless | Runtime | Retired alias of endless |
+Single PlatformIO environment:
 
-`pico_trim_preview` has been retired — the haptic layer with runtime config
-(`W R360`, `W D48`, `W C180`) provides equivalent functionality.  The env
-now builds identically to `pico_1motor_endless`.
+| Env                    | Mode     | Status  |
+|------------------------|----------|---------|
+| `pico_1motor_endless`  | Endless  | Tested  |
 
-## Test Instrumentation
+Platform: `maxgerhardt/platform-raspberrypi`, board `pico`,
+core `earlephilhower`, framework `arduino`.
+
+Build flags: `-DUSE_TINYUSB`, TinyUSB config via `my_tusb_config.h`.
+
+
+## Architecture Debts
+
+### 1. Global PID — no per-hardware motor parameters
+
+PID gains (pid_config.h) are compile-time `#define`s shared by all
+profiles.  The user has observed that I=0.2 "kills the fun" on
+throttle-type controls where smooth free movement is desired, while
+the same I-term is needed for position-holding on trim wheels.
+
+Future hardware with different motors will need different gains
+entirely.  The design direction (v0.2+):
 
 ```
-  RP2040 ──── /dev/ttyACM0 (CDC) ──── Test Host
-                │                        │
-                │  Commander in ◄────────┤
-                │  @T telemetry out ────►│
-                │                        │
-                ├── /dev/hidrawN ───────►│ (HID reports)
-                └── MIDI ◄──────────────┤ (not yet used in tests)
+  MotorConfig (per hardware)       ControlProfile (per aircraft control)
+  ├─ pole_pairs                    ├─ name, midi_cc, range, detents...
+  ├─ pid_P, pid_I, pid_D           └─ (what the axis does)
+  ├─ vel_P, vel_I
+  ├─ voltage_limit
+  └─ lpf_Tf
+
+  Selected independently:
+    Hardware = which motor is connected
+    Profile  = which aircraft control to emulate
 ```
 
-Tests use a request-observe loop:
-1. Send Commander `T<angle>` to request motor position
-2. Read `@T` telemetry lines to observe actual position, error, variance
-3. Assert quality goals (resolution, speed, precision, overshoot)
+This separates "what motor am I driving?" from "what does this axis
+feel like?" — allowing any profile on any hardware.
 
-The haptic test suite uses Commander `W` commands to configure detent
-parameters, then physical observation via `@T` lines to verify behavior.
+### 2. Global state coupling
 
-## Resolved Architecture Debts
+`target_angle`, `current_angle`, and motor objects are bare globals
+in `motor_control.h`.  Acceptable for single-motor embedded code, but
+limits testability and multi-motor scaling.
 
-1. **`trim_wheel_preview` retired** — haptic layer with `range_deg=360,
-   detent_count=48` replaces it.  Dead code in `trim_wheel_preview.cpp/h`
-   can be deleted once confirmed unnecessary.
+### 3. config.h split-brain
 
-2. **Idle timeout is haptic-aware** — `update_motor()` checks
-   `haptic_get_config().enabled` and keeps voltage active when haptic needs
-   holding torque, instead of relying on `#ifdef TRIM_WHEEL_PREVIEW`.
-
-3. **MIDI routes through haptic** — `process_midi_message()` calls
-   `haptic_set_position()` when haptic is enabled, consistent with
-   Commander `T` command behavior.
-
-4. **Unified HID output path** — `service_hid_output()` uses the same
-   haptic-enabled/disabled branch regardless of build env.  No more
-   `#ifdef TRIM_WHEEL_PREVIEW` in the HID path.
-
-## Remaining Architecture Debts
-
-1. **Compile-time motor type vs runtime profiles** — `get_motor_profile()`
-   uses `#ifdef MOTOR_LIMITED`, ignoring per-axis motor config in profiles.
-   HID output normalization may disagree with MIDI input scaling.
-
-2. **Global state coupling** — `target_angle[]`, `current_angle[]`, and
-   motor objects are exported as bare globals in `motor_control.h`.
-   Acceptable for single-motor embedded code, but limits testability.
-
-3. **`config.h` split-brain** — Declares `g_active_profile` extern and
-   getter/setter prototypes, but definitions live in `profile_manager.cpp`.
-   Not self-contained.
+Declares `g_active_profile` extern and getter/setter prototypes, but
+definitions live in `profile_manager.cpp`.  Not self-contained.
