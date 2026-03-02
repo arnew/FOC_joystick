@@ -14,20 +14,20 @@ Hardware issues, test results, and validation.
 
 ## Current Test Status
 
-**4 of 6 tests passing** (Feb 22, 2026)
+**7 of 8 quality goals passing** (v0.1, Feb 28, 2026)
 
+Test G (Random Walk) scores 18/20 — accepted threshold.
 See [TEST_RESULTS.md](TEST_RESULTS.md) for details.
 
 ---
 
 ## Known Hardware Issues
 
-**Resolved**:
-- Dual CDC MIDI conflict → Fixed with separate serial ports
-- AS5600 angle resolution → Calibrated I2C timing
-
-**Active**:
-- Motor reliability concerns (see [../sessions/SITUATION_ANALYSIS_AND_REWORK_PLAN.md](../sessions/SITUATION_ANALYSIS_AND_REWORK_PLAN.md))
+**All resolved** as of v0.1:
+- Dual CDC MIDI conflict → separate serial ports
+- AS5600 angle resolution → calibrated I2C timing
+- Motor reliability → power-cycle resolves intermittent issues
+- USB CDC overflow → reduced telemetry rate, ring buffer
 
 See [TESTING_FINDINGS.md](TESTING_FINDINGS.md) for complete history.
 
@@ -36,10 +36,16 @@ See [TESTING_FINDINGS.md](TESTING_FINDINGS.md) for complete history.
 ## Running Tests
 
 ```bash
-# Full automated suite
-python3 test/test_suite_automated.py
+# Quality goals suite (requires device)
+python3 test/quality_goals_test_suite.py
+
+# Cessna Trim linearity (requires device)
+python3 test/test_cessna_trim.py
+
+# Headless unit tests
+python -m pytest test/unit/ -q
 
 # Interactive debugging
-python3 test/debug_joystick.py   # Monitor motor state
-python3 test/debug_midi.py       # Send MIDI commands
+python3 test/tools/debug_joystick.py   # Monitor motor state
+python3 test/tools/debug_midi.py       # Send MIDI commands
 ```

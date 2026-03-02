@@ -57,5 +57,5 @@ pip3 install pygame   # only for hid_monitor.py
 
 ## See Also
 
-- [.agentic/DEVICE_TESTING.md](../.agentic/DEVICE_TESTING.md) — Device detection & CI workflow
+- [.agentic/testing/DEVICE_TESTING.md](../.agentic/testing/DEVICE_TESTING.md) — Device detection & CI workflow
 - [.agentic/testing/](../.agentic/testing/) — Test plans & results

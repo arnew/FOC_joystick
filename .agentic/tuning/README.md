@@ -9,7 +9,7 @@ Documentation for motor PID calibration, including implementation details and us
 - [implementation/](implementation/) - Technical implementation details
 - [guides/](guides/) - User-facing how-to documentation
 - [ENCODER_LINEARIZATION.md](ENCODER_LINEARIZATION.md) - AS5600 eccentricity fix options (physical, software, register)
-- [HAPTIC_ENDSTOP_INVESTIGATION.md](HAPTIC_ENDSTOP_INVESTIGATION.md) - Haptic detent overshoot cascade (open problem)
+- [HAPTIC_ENDSTOP_INVESTIGATION.md](HAPTIC_ENDSTOP_INVESTIGATION.md) - Haptic detent overshoot cascade (resolved v0.1: rate-limited transitions)
 
 ---
 
@@ -35,7 +35,7 @@ Documentation for motor PID calibration, including implementation details and us
 **Implementation Status**: ✅ Complete (Feb 22, 2026)
 
 **Tools Available**:
-- Automated calibration: `test/calibrate_pid.py`
+- Automated calibration: `test/tools/pid_optimizer.py` (coordinate-descent optimizer)
 - Online parameter transfer via serial commands
 - Quality evaluation with 0-100 scoring
 

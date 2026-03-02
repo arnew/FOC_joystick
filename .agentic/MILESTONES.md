@@ -26,7 +26,7 @@
 - RP2040 + AS5600 + BLDC 7pp + 3PWM driver on breadboard
 - SimpleFOC angle mode, unbounded rotation (-∞ to +∞)
 - PID tuned (P=16, I=0.2, D=1.0, vel_P=0.1, vel_I=0.5, Tf=0.001)
-- 10 control profiles with ControlProfile struct
+- 11 control profiles with ControlProfile struct
 - Custom DetentPoint maps with per-detent strength
 - Gate mode, smooth mode, uniform detents
 - USB composite: HID joystick + MIDI + CDC serial

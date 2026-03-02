@@ -60,9 +60,8 @@ gh workflow run manual-hardware-test.yml \
 
 **Local testing (agent pre-check only)**:
 ```bash
-cd test
-python3 test_suite_automated.py --tests midi sweep  # Run specific tests
-python3 test_suite_automated.py                     # Run all tests
+python3 test/quality_goals_test_suite.py             # Run all tests
+python3 test/quality_goals_test_suite.py --tests A B # Run specific tests
 ```
 
 Do not require or request local test execution from the human user. Use CI/manual CI workflows for verification.

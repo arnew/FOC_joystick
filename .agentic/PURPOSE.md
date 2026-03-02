@@ -28,7 +28,7 @@
 - **Motor Control**: SimpleFOC 2.4.0
 - **USB**: Adafruit TinyUSB 3.7.2 (HID + MIDI + CDC)
 - **Sensor**: AS5600 magnetic encoder (I2C)
-- **Build**: PlatformIO with 3 environments (1motor_endless, 1motor_limited, 2motor_limited)
+- **Build**: PlatformIO, single environment (pico_1motor_endless)
 - **CI/CD**: GitHub Actions (code-quality, headless-test, hardware-test)
 - **Testing**: pytest (headless + hardware markers), simulator
 
@@ -36,8 +36,8 @@
 
 ### Primary
 1. ✅ Reliable motor control with tunable PID
-2. ✅ USB HID joystick output
-3. ⏳ MIDI input for flight controls
+2. ✅ USB HID joystick output (16-bit)
+3. ✅ MIDI input (CC → position, CC#0 → profile switch)
 4. ⏳ Dual-axis support (throttle + trim)
 
 ### Secondary
@@ -59,7 +59,7 @@
 - [x] Compiles and uploads to RP2040
 - [x] Motor spins and tracks target angle
 - [x] USB HID reports joystick position
-- [ ] MIDI CC messages control motor positions
+- [x] MIDI CC messages control motor positions
 - [ ] PID tuning persists across reboots
 
 **Production Ready:**

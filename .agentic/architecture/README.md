@@ -48,16 +48,16 @@ System design, build procedures, and code style guidelines.
 
 ## Testing Requirements
 
-Before pushing: `python3 test/test_suite_automated.py` must pass all tests.
+Before pushing: `python3 test/quality_goals_test_suite.py` must pass.
 
 ---
 
 ## Quick Workflow
 
-1. **Build**: `platformio run -e pico_1motor_endless`
-2. **Upload**: `platformio run -e pico_1motor_endless --target upload`
-3. **Test**: `python3 test/test_suite_automated.py`
-4. **Debug**: `python3 test/debug_joystick.py` (monitor) + `python3 test/debug_midi.py` (control)
+1. **Build**: `pio run`
+2. **Upload**: `pio run -t upload`
+3. **Test**: `python3 test/quality_goals_test_suite.py`
+4. **Debug**: `python3 test/tools/debug_joystick.py` (monitor) + `python3 test/tools/debug_midi.py` (control)
 
 ---
 
@@ -73,22 +73,31 @@ Before pushing: `python3 test/test_suite_automated.py` must pass all tests.
 
 ```
 src/
-  ├─ main.cpp         # Motor control, MIDI handler, USB HID
-  ├─ config.h         # Axis profiles, motor configurations
+  ├─ config.h                  # 11 profiles, detent maps
+  ├─ main.cpp                  # setup(), loop(), rate scheduling
+  ├─ motor_control.cpp/h       # SimpleFOC init, FOC loop, accessors
+  ├─ haptic_layer.cpp/h        # Detent engine (v2)
+  ├─ profile_manager.cpp/h     # EEPROM persistence, profile state
+  ├─ input/
+  │   ├─ commander_integration # Serial Commander (M/T/A/W)
+  │   └─ midi_handler          # MIDI CC → position, CC#0 → profile
+  └─ output/
+      ├─ usb_hid               # TinyUSB HID joystick (16-bit axes)
+      └─ telemetry             # @T structured output, ring buffer
 
 test/
-  ├─ test_suite_automated.py  # Automated tests
-  ├─ debug_joystick.py        # Real-time monitor
-  ├─ debug_midi.py            # Interactive MIDI sender
-  └─ README.md                # Test documentation
+  ├─ quality_goals_test_suite.py  # 8-test quality suite
+  ├─ test_cessna_trim.py          # Linearity & endstop test
+  ├─ tools/                       # Debug & diagnostic scripts
+  └─ unit/                        # Headless pytest tests
 
-platformio.ini         # Build configs (endless, limited, 2motor)
+platformio.ini         # Single env: pico_1motor_endless
 ```
 
 ---
 
 ## Key Facts
 
-- **Hardware**: RP2040 + SimpleFOC + AS5600 encoder
-- **Protocol**: MIDI CC @ 31250 baud (USB dual CDC)
-- **Testing**: Automated suite verifies system ID, motor response, joystick output
+- **Hardware**: RP2040 + SimpleFOC + AS5600 encoder + BLDC 7pp
+- **Protocol**: Native USB MIDI (TinyUSB composite)
+- **Testing**: Quality goals suite (8 tests), Cessna trim linearity test
