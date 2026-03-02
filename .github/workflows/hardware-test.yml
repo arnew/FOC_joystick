@@ -1,0 +1,264 @@
+name: Hardware Test
+
+on:
+  push:
+    branches: [dev, feature/*]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Firmware
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Try to download artifact from Build workflow
+        id: download-build-artifact
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build.yml
+          name: firmware-pico_1motor_endless
+          path: ./build-artifact/
+          search_artifacts: true
+          if_no_artifact_found: warn
+      
+      - name: Check if we need to build
+        id: check-build
+        run: |
+          if [ -f ./build-artifact/firmware.uf2 ]; then
+            echo "✓ Found firmware from Build workflow (3x faster, ubuntu-latest)"
+            echo "need_build=false" >> $GITHUB_OUTPUT
+            mkdir -p .pio/build/pico_1motor_endless/
+            cp ./build-artifact/firmware.uf2 .pio/build/pico_1motor_endless/
+          else
+            echo "⚠ No Build workflow artifact found, building locally on hardware runner"
+            echo "need_build=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Setup Python venv
+        if: steps.check-build.outputs.need_build == 'true'
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        if: steps.check-build.outputs.need_build == 'true'
+        run: |
+          pip install --upgrade pip
+          pip install platformio pyserial pygame
+      
+      - name: Build firmware locally
+        if: steps.check-build.outputs.need_build == 'true'
+        run: platformio run -e pico_1motor_endless
+      
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-hw-test-${{ github.run_number }}
+          path: .pio/build/pico_1motor_endless/firmware.uf2
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Device
+    needs: [build]
+    runs-on: [self-hosted, hardware]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python venv
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          echo "$HOME/ci-venv/bin" >> $GITHUB_PATH
+      
+      - name: Install PlatformIO
+        run: |
+          pip install --upgrade pip
+          pip install platformio
+          
+      - name: Download firmware artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-hw-test-${{ github.run_number }}
+          path: ./
+      
+      - name: Prepare firmware for upload
+        run: |
+          mkdir -p .pio/build/pico_1motor_endless/
+          cp firmware.uf2 .pio/build/pico_1motor_endless/firmware.uf2
+          ls -lh .pio/build/pico_1motor_endless/firmware.uf2
+
+      - name: Unmount RP2040 BOOTSEL volume (if mounted)
+        run: |
+          entries="$(lsblk -nrpo NAME,LABEL,MOUNTPOINT 2>/dev/null | awk '$2=="RPI-RP2" && $3!="" {print $1" "$3}')"
+          if [ -n "$entries" ]; then
+            echo "Found mounted RP2040 BOOTSEL volume(s):"
+            echo "$entries"
+            while read -r dev mnt; do
+              [ -n "$dev" ] || continue
+              [ -n "$mnt" ] || continue
+              echo "Unmounting $dev from $mnt"
+              umount "$mnt" || true
+            done <<< "$entries"
+            udevadm settle || true
+          else
+            echo "No mounted RPI-RP2 volume found"
+          fi
+
+      - name: Ensure upload port is free
+        run: |
+          echo "Checking upload port: /dev/ttyACM0"
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -v /dev/ttyACM0 || true
+            pids="$(fuser /dev/ttyACM0 2>/dev/null || true)"
+            if [ -n "$pids" ]; then
+              echo "Terminating processes using /dev/ttyACM0: $pids"
+              kill -TERM $pids || true
+              sleep 1
+              kill -KILL $pids || true
+            fi
+            fuser -v /dev/ttyACM0 || true
+          fi
+          udevadm settle || true
+      
+      - name: Upload firmware to device
+        run: |
+          echo "=== Upload firmware ==="
+          platformio run -e pico_1motor_endless --target upload || {
+            echo "Upload failed once; retrying after short settle..."
+            sleep 2
+            udevadm settle || true
+            platformio run -e pico_1motor_endless --target upload
+          }
+          echo "✓ Upload completed"
+      
+      - name: Wait for device reset and boot
+        run: |
+          echo "=== Waiting for device reset and firmware boot ==="
+          echo "Waiting 2 seconds for picotool to complete..."
+          sleep 2
+          
+          echo "Checking for /dev/ttyACM0..."
+          for i in $(seq 1 30); do
+            if [ -e /dev/ttyACM0 ]; then
+              echo "✓ Device enumerated as /dev/ttyACM0"
+              break
+            fi
+            sleep 1
+          done
+          
+          if [ ! -e /dev/ttyACM0 ]; then
+            echo "✗ ERROR: /dev/ttyACM0 not present after 30 seconds"
+            ls -l /dev/ttyACM* || true
+            exit 1
+          fi
+          
+          echo "Waiting 5 more seconds for firmware initialization..."
+          sleep 5
+          
+          echo "Checking device readiness..."
+          if [ -c /dev/ttyACM0 ]; then
+            echo "✓ /dev/ttyACM0 is a character device (ready)"
+          else
+            echo "⚠ /dev/ttyACM0 exists but is not a character device"
+          fi
+          
+          ls -l /dev/ttyACM0
+          udevadm info /dev/ttyACM0 | grep -E "(ID_MODEL|ID_VENDOR|ID_SERIAL)" || true
+
+  test-simple:
+    name: Test - Simple Hardware Verification
+    needs: [deploy]
+    runs-on: [self-hosted, hardware]
+    continue-on-error: true  # Hardware tests are informational only
+
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python dependencies
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          source $HOME/ci-venv/bin/activate || true
+          pip install --upgrade pip pyserial
+      
+      - name: Run simple hardware test
+        run: |
+          cd test
+          echo "=== Running Simple Hardware Test Suite ==="
+          echo "This test verifies:"
+          echo " - Device file exists"
+          echo " - Device can be opened"
+          echo " - Firmware is running (any output)"
+          echo " - Motor initialization occurs"
+          echo " - Device sends telemetry"
+          echo ""
+          python3 simple_hardware_test.py || {
+            echo ""
+            echo "⚠ Hardware test failed - this is informational only"
+            echo "Hardware tests may fail due to CI upload/reset issues"
+            echo "Manual testing remains authoritative"
+            exit 1
+          }
+      
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-simple-${{ github.run_number }}
+          path: |
+            test/*.log
+            test/*.json
+          retention-days: 30
+
+  test-movement:
+    name: Test - Motor Movement
+    needs: [test-simple]
+    runs-on: [self-hosted, hardware]
+    continue-on-error: true  # Hardware tests are informational only
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python dependencies
+        run: |
+          python3 -m venv $HOME/ci-venv || true
+          source $HOME/ci-venv/bin/activate || true
+          pip install --upgrade pip pyserial
+      
+      - name: Run motor movement test
+        run: |
+          cd test
+          echo "=== Running Motor Movement Test ==="
+          echo "This test verifies:"
+          echo " - Motor responds to SimpleFOC Commander commands"
+          echo " - Motor physically moves when commanded"
+          echo " - Motor can reach target angles"
+          echo ""
+          python3 test_motor_movement.py || {
+            echo ""
+            echo "⚠ Motor movement test failed"
+            echo "This may indicate:"
+            echo " - Motor hardware issue"
+            echo " - PID tuning needed"
+            echo " - Physical obstruction"
+            exit 1
+          }
+      
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-movement-${{ github.run_number }}
+          path: |
+            test/*.log
+            test/*.json
+          retention-days: 30

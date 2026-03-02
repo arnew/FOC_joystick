@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "Generating changelog since last tag..."
+          
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tag found - generating full changelog"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "Generating changelog since $LAST_TAG"
+            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Save changelog to file
+          echo "$CHANGELOG" > CHANGELOG.txt
+          
+          # Add to summary
+          echo "## Changelog" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "$CHANGELOG" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: Release ${{ steps.get_version.outputs.version }}
+          body_path: CHANGELOG.txt
+          draft: false
+          prerelease: false
+
+  build-release-firmware:
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment:
+          - pico_1motor_endless
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          pip install platformio
+
+      - name: Build firmware
+        run: |
+          platformio run -e ${{ matrix.environment }}
+
+      - name: Package firmware
+        run: |
+          mkdir -p release
+          cp .pio/build/${{ matrix.environment }}/firmware.uf2 \
+             release/firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.uf2
+          cp .pio/build/${{ matrix.environment }}/firmware.elf \
+             release/firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.elf
+          
+          # Create README for this build
+          cat > release/README.txt << EOF
+          FOC Joystick Firmware - ${{ matrix.environment }}
+          Version: ${{ needs.create-release.outputs.version }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          Installation:
+          1. Hold BOOTSEL button on Raspberry Pi Pico
+          2. Connect USB cable (or reconnect while holding BOOTSEL)
+          3. Pico appears as USB drive "RPI-RP2"
+          4. Copy firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.uf2 to the drive
+          5. Pico automatically reboots and runs new firmware
+          
+          Configuration: ${{ matrix.environment }}
+          $(grep -A 10 "\[env:${{ matrix.environment }}\]" platformio.ini || echo "See platformio.ini for details")
+          EOF
+          
+          # Create zip package
+          cd release
+          zip firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.zip \
+              firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.uf2 \
+              firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.elf \
+              README.txt
+
+      - name: Upload Release Asset (UF2)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.uf2
+          asset_name: firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.uf2
+          asset_content_type: application/octet-stream
+
+      - name: Upload Release Asset (ZIP)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.zip
+          asset_name: firmware-${{ matrix.environment }}-${{ needs.create-release.outputs.version }}.zip
+          asset_content_type: application/zip
+
+  release-summary:
+    runs-on: ubuntu-latest
+    needs: [create-release, build-release-firmware]
+    if: always()
+    steps:
+      - name: Release summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ needs.create-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ needs.build-release-firmware.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.build-release-firmware.result }}" = "success" ]; then
+            echo "✅ Release created successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Firmware binaries uploaded for:" >> $GITHUB_STEP_SUMMARY
+            echo "- pico_1motor_endless" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Release build failed" >> $GITHUB_STEP_SUMMARY
+          fi

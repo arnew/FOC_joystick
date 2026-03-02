@@ -1,0 +1,140 @@
+name: Deploy to Hardware
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'PlatformIO environment to deploy'
+        required: true
+        default: 'pico_1motor_endless'
+        type: choice
+        options:
+          - pico_1motor_endless
+      force_manual_bootsel:
+        description: 'Skip automatic reset (require manual BOOTSEL button)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, pico_1motor_endless]
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        run: |
+          python3 --version
+
+      - name: Install PlatformIO
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install --break-system-packages platformio
+          platformio --version
+
+      - name: Build firmware
+        run: |
+          platformio run -e ${{ github.event.inputs.environment }}
+          echo "## Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: \`${{ github.event.inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Get firmware info
+          if [ -f .pio/build/${{ github.event.inputs.environment }}/firmware.elf ]; then
+            size_output=$(size .pio/build/${{ github.event.inputs.environment }}/firmware.elf)
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "$size_output" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload firmware to hardware
+        id: upload
+        run: |
+          echo "Uploading firmware to hardware..."
+          
+          if [ "${{ github.event.inputs.force_manual_bootsel }}" = "true" ]; then
+            echo "⚠️ Manual BOOTSEL required - please press BOOTSEL button on Pico" >> $GITHUB_STEP_SUMMARY
+            echo "Waiting 30 seconds for manual BOOTSEL..."
+            sleep 30
+          fi
+          
+          # Attempt upload
+          if platformio run -e ${{ github.event.inputs.environment }} --target upload; then
+            echo "upload_status=success" >> $GITHUB_OUTPUT
+            echo "✅ Firmware uploaded successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "upload_status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Upload failed - may need manual BOOTSEL button press" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: Verify device enumeration
+        if: steps.upload.outputs.upload_status == 'success'
+        run: |
+          echo "Waiting for device to enumerate..."
+          sleep 3
+          
+          echo "## Device Verification" >> $GITHUB_STEP_SUMMARY
+          
+          # Check serial port
+          if ls /dev/ttyACM* 2>/dev/null; then
+            serial_port=$(ls /dev/ttyACM* | head -n1)
+            echo "✅ Serial port detected: \`$serial_port\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No serial port detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check HID device
+          if ls /dev/input/js* 2>/dev/null; then
+            joystick_dev=$(ls /dev/input/js* | head -n1)
+            echo "✅ HID joystick detected: \`$joystick_dev\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No HID joystick detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check USB devices
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### USB Devices" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          lsusb | grep -i "2e8a\|raspberry" || echo "No RP2040 devices found" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Quick serial check
+        if: steps.upload.outputs.upload_status == 'success'
+        run: |
+          # Check if serial port exists
+          if ls /dev/ttyACM* 2>/dev/null; then
+            serial_port=$(ls /dev/ttyACM* | head -n1)
+            echo "Reading serial output for 3 seconds..."
+            
+            # Try to read serial output (non-blocking)
+            timeout 3s cat $serial_port > serial_output.txt 2>&1 || true
+            
+            if [ -s serial_output.txt ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Serial Output Sample" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              head -n 20 serial_output.txt >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "ℹ️ No serial output detected (may be normal for motor-less config)" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Upload**: ${{ steps.upload.outputs.upload_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Firmware deployed to hardware runner with tag: \`pico_1motor_endless\`" >> $GITHUB_STEP_SUMMARY

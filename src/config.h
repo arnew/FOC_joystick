@@ -3,217 +3,200 @@
 
 #include <Arduino.h>
 
-/**
- * Motor Profile Definition
- * Defines physical and operational parameters for a single motor
- */
-struct MotorProfile {
-  uint8_t id;              // Motor index (0-1)
-  float min_angle;         // Minimum angle (degrees)
-  float max_angle;         // Maximum angle (degrees)
-  bool is_endless;         // True = trim/endless rotation; False = limited range
-  float voltage_limit;     // Max voltage to motor (V)
-  const char* label;       // Human-readable name
-};
+// ============================================================================
+// DETENT POINT — one stop in a custom detent map
+// ============================================================================
+//
+// position_pct: 0–100 within travel range.
+// strength:     0.0 = waypoint (no snap), 1.0 = hard gate.
 
-/**
- * Axis Profile Definition
- * Maps a control axis to motor and MIDI input
- */
-struct AxisProfile {
-  uint8_t motor_id;        // Motor index this axis controls (0-1)
-  uint8_t midi_cc;         // MIDI CC number (0-127)
-  const char* label;       // Human-readable name (Throttle, Flaps, etc.)
-  bool reversed;           // Reverse joystick output (100% → 0%)
-  float scaling_factor;    // Scaling multiplier for angle calculation
-  MotorProfile motor;      // Motor configuration for this axis
+struct DetentPoint {
+    float position_pct;
+    float strength;
 };
 
 // ============================================================================
-// HARDWARE CONFIGURATION SELECTOR
+// CONTROL PROFILE
 // ============================================================================
-// Build with: platformio run -e pico_1motor_endless
-//             platformio run -e pico_1motor_limited
-//             platformio run -e pico_2motor_limited
+//
+// Each profile defines one selectable control mode for the single-motor
+// hardware.  Select at runtime via Commander 'A' or MIDI CC#121.
+// Tweak haptic params live via Commander 'W' sub-commands.
+//
+// Detent modes (choose one):
+//   Uniform clicks — detent_map==nullptr, detent_count>0
+//     Evenly spaced, same strength.  Trim wheels.
+//   Custom map     — detent_map!=nullptr
+//     Arbitrary positions and per-detent strengths.
+//   Smooth         — both null/zero.  Free rotation.
+//
+// Gate vs Click:
+//   gate_mode false (default) — always snap to nearest detent.
+//   gate_mode true            — snap only within gate_capture_deg of a
+//                                detent; free proportional movement between
+//                                gates.  A320 throttle IDLE→CLB zone.
 
-#if !defined(HW_CONFIG)
-  #define HW_CONFIG HW_1MOTOR_ENDLESS
-#endif
+struct ControlProfile {
+    const char* name;
+    uint8_t     midi_cc;
+    bool        reversed;
 
-#define HW_1MOTOR_ENDLESS    0
-#define HW_1MOTOR_LIMITED    1
-#define HW_2MOTOR_LIMITED    2
+    // Travel geometry
+    float       range_deg;
+    float       center_deg;
+    float       endstop_margin;
 
-// ============================================================================
-// CONFIGURATION 1: Single Endless Motor (Current Hardware - Trim-like)
-// ============================================================================
-#if HW_CONFIG == HW_1MOTOR_ENDLESS
+    // Haptic detents (see modes above)
+    uint16_t    detent_count;       // uniform click count (0 = smooth)
+    float       detent_strength;    // uniform strength 0–1
+    const DetentPoint* detent_map;  // custom array (nullptr = uniform)
+    uint8_t     detent_map_size;
+    bool        gate_mode;          // true = capture-zone gates
+    float       gate_capture_deg;   // half-width of capture zone (degrees)
 
-static const MotorProfile MOTOR_0 = {
-  .id = 0,
-  .min_angle = 0.0f,
-  .max_angle = 6.28318f,  // 360 degrees in radians (endless)
-  .is_endless = true,
-  .voltage_limit = 2.0f,
-  .label = "Motor 0 (Endless Trim)"
+    // USB identity (applied on boot — profile change reboots)
+    uint16_t    usb_pid;
+    const char* usb_product;
 };
 
-static const AxisProfile A320_CONFIG[] = {
-  {
-    .motor_id = 0,
-    .midi_cc = 64,          // Sustain pedal CC (trim-like control)
-    .label = "Trim",
-    .reversed = false,
-    .scaling_factor = 2.0f,
-    .motor = MOTOR_0
-  }
-};
-
-#define NUM_A320_AXES (sizeof(A320_CONFIG) / sizeof(AxisProfile))
-#define NUM_MOTORS 1
-
 // ============================================================================
-// CONFIGURATION 2: Single Limited Motor (0-180° like throttle/flaps)
-// ============================================================================
-#elif HW_CONFIG == HW_1MOTOR_LIMITED
-
-static const MotorProfile MOTOR_0 = {
-  .id = 0,
-  .min_angle = 0.0f,
-  .max_angle = 3.14159f,  // 180 degrees in radians
-  .is_endless = false,
-  .voltage_limit = 2.0f,
-  .label = "Motor 0 (Limited Range)"
-};
-
-static const AxisProfile A320_CONFIG[] = {
-  {
-    .motor_id = 0,
-    .midi_cc = 7,           // Standard MIDI volume
-    .label = "Throttle",
-    .reversed = false,
-    .scaling_factor = 1.0f,
-    .motor = MOTOR_0
-  },
-  {
-    .motor_id = 0,
-    .midi_cc = 11,          // Expression
-    .label = "Flaps",
-    .reversed = false,
-    .scaling_factor = 1.0f,
-    .motor = MOTOR_0
-  }
-};
-
-#define NUM_A320_AXES (sizeof(A320_CONFIG) / sizeof(AxisProfile))
-#define NUM_MOTORS 1
-
-// ============================================================================
-// CONFIGURATION 3: Dual Motors (Throttle + Trim, both limited & endless)
-// ============================================================================
-#elif HW_CONFIG == HW_2MOTOR_LIMITED
-
-static const MotorProfile MOTOR_0 = {
-  .id = 0,
-  .min_angle = 0.0f,
-  .max_angle = 3.14159f,  // 180 degrees
-  .is_endless = false,
-  .voltage_limit = 2.0f,
-  .label = "Motor 0 (Throttle/Flaps)"
-};
-
-static const MotorProfile MOTOR_1 = {
-  .id = 1,
-  .min_angle = 0.0f,
-  .max_angle = 6.28318f,  // 360 degrees (endless trim)
-  .is_endless = true,
-  .voltage_limit = 2.0f,
-  .label = "Motor 1 (Trim)"
-};
-
-static const AxisProfile A320_CONFIG[] = {
-  {
-    .motor_id = 0,
-    .midi_cc = 7,
-    .label = "Throttle",
-    .reversed = false,
-    .scaling_factor = 1.0f,
-    .motor = MOTOR_0
-  },
-  {
-    .motor_id = 0,
-    .midi_cc = 11,
-    .label = "Flaps",
-    .reversed = false,
-    .scaling_factor = 1.0f,
-    .motor = MOTOR_0
-  },
-  {
-    .motor_id = 1,
-    .midi_cc = 64,
-    .label = "Trim",
-    .reversed = false,
-    .scaling_factor = 2.0f,
-    .motor = MOTOR_1
-  }
-};
-
-#define NUM_A320_AXES (sizeof(A320_CONFIG) / sizeof(AxisProfile))
-#define NUM_MOTORS 2
-
-#endif  // HW_CONFIG selection
-
-// ============================================================================
-// UTILITY FUNCTIONS
+// PROFILE ENUMERATION
 // ============================================================================
 
-/**
- * Find axis profile by MIDI CC number
- * @param midi_cc MIDI control change number
- * @return Pointer to AxisProfile if found, NULL otherwise
- */
-static inline const AxisProfile* find_axis_by_cc(uint8_t midi_cc) {
-  for (uint8_t i = 0; i < NUM_A320_AXES; i++) {
-    if (A320_CONFIG[i].midi_cc == midi_cc) {
-      return &A320_CONFIG[i];
-    }
-  }
-  return NULL;
-}
+enum ProfileId : uint8_t {
+    PROFILE_CESSNA_TRIM = 0,
+    PROFILE_CESSNA_THROTTLE,
+    PROFILE_CESSNA_FLAPS,
+    PROFILE_CESSNA_172RG_GEAR,
+    PROFILE_A320_TRIM,
+    PROFILE_A320_THROTTLE,
+    PROFILE_A320_FLAPS,
+    PROFILE_A320_SPOILERS,
+    PROFILE_GLIDER_TRIM,
+    PROFILE_GLIDER_SPOILER,
+    PROFILE_BENCH_TEST,
+    NUM_PROFILES
+};
 
-/**
- * Get motor profile by index
- * @param motor_id Motor index (0-1)
- * @return Pointer to MotorProfile if valid, NULL otherwise
- */
-static inline const MotorProfile* get_motor_profile(uint8_t motor_id) {
-  if (motor_id == 0) return &MOTOR_0;
-  #if NUM_MOTORS > 1
-  if (motor_id == 1) return &MOTOR_1;
-  #endif
-  return NULL;
-}
+// ============================================================================
+// CUSTOM DETENT MAPS
+// ============================================================================
 
-/**
- * Convert MIDI CC value (0-127) to motor angle (min-max degrees)
- * @param axis Axis profile
- * @param cc_value MIDI CC value (0-127)
- * @return Target angle in radians
- */
-static inline float cc_to_angle(const AxisProfile* axis, uint8_t cc_value) {
-  if (!axis) return 0.0f;
-  
-  float normalized = (float)cc_value / 127.0f;  // 0.0 to 1.0
-  const MotorProfile* motor = &(axis->motor);
-  
-  // For limited axes: map to min-max range
-  if (!motor->is_endless) {
-    return motor->min_angle + (normalized * (motor->max_angle - motor->min_angle));
-  }
-  
-  // For endless axes: scale full range
-  return normalized * 6.28318f;  // 360 degrees
-}
+// Cessna 172SP flap lever: 4 positions (0°, 10°, 20°, 30°)
+// Note: pre-1981 172P had 5 positions up to 40°.
+static const DetentPoint CESSNA_FLAPS_DETENTS[] = {
+    {   0.0f, 1.0f },   // 0° retracted
+    {  33.3f, 1.0f },   // 10°
+    {  66.7f, 1.0f },   // 20°
+    { 100.0f, 1.0f },   // 30° full
+};
+
+// Cessna 172RG gear: strong click at DOWN and UP (standard 172 has fixed gear)
+static const DetentPoint CESSNA_GEAR_DETENTS[] = {
+    {   0.0f, 1.0f },   // DOWN
+    { 100.0f, 1.0f },   // UP
+};
+
+// A320 thrust lever gates (gate_mode = true):
+//   REV FULL → REV IDLE → IDLE → [autothrust zone] → CLB → FLX → TOGA
+//   Between IDLE and CLB: free proportional movement (autothrust).
+//   Between REV IDLE and REV FULL: free proportional reverse.
+//   Positions approximate real A320 quadrant detent spacing.
+//   ref: forums.flightsimulator.com/t/377566
+static const DetentPoint A320_THROTTLE_DETENTS[] = {
+    {   0.0f, 1.0f },   // REV FULL
+    {  12.0f, 0.8f },   // REV IDLE
+    {  25.0f, 1.0f },   // IDLE
+    {  52.0f, 1.0f },   // CLB   (~36% of IDLE→TOGA, matches TCA)
+    {  73.0f, 0.8f },   // FLX/MCT (~64% of IDLE→TOGA)
+    { 100.0f, 1.0f },   // TOGA
+};
+
+// A320 flap lever: 5 discrete positions
+static const DetentPoint A320_FLAPS_DETENTS[] = {
+    {   0.0f, 1.0f },   // 0 (UP)
+    {  25.0f, 1.0f },   // 1
+    {  50.0f, 1.0f },   // 2
+    {  75.0f, 1.0f },   // 3
+    { 100.0f, 1.0f },   // FULL
+};
+
+// A320 speed brake: proportional, no intermediate detents in real aircraft.
+// Hard stop at retracted + full; very soft midpoint reference only.
+static const DetentPoint A320_SPOILER_DETENTS[] = {
+    {   0.0f, 1.0f },   // Retracted (hard stop)
+    {  50.0f, 0.1f },   // Midpoint reference (very soft)
+    { 100.0f, 1.0f },   // Full (hard stop)
+};
+
+// Glider airbrake: lock at closed, proportional to full. No intermediate detents.
+static const DetentPoint GLIDER_SPOILER_DETENTS[] = {
+    {   0.0f, 1.0f },   // Locked closed (hard detent)
+    { 100.0f, 0.8f },   // Full open (physical stop)
+};
+
+// ============================================================================
+// PROFILE TABLE
+// ============================================================================
+//
+// Fields: name, cc, rev, range, center, margin,
+//         det_count, det_str, det_map, map_sz, gate, gate_cap,
+//         usb_pid, usb_product
+
+static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
+    // --- Cessna 172 ---
+    //  Real C172 trim wheel: ~18 full revolutions nose-down → nose-up.
+    //  Light uniform detents (36/rev) give holding friction without hard clicks.
+    { "Cessna Trim",       64, false, 6480.0f, 3240.0f, 5.0f,
+      648, 0.15f, nullptr, 0, false, 0.0f,
+      0x1701, "FOC - Cessna Trim" },
+
+    { "Cessna Throttle",    7, false, 180.0f, 90.0f, 2.0f,
+      0, 0.0f, nullptr, 0, false, 0.0f,
+      0x1702, "FOC - Cessna Throttle" },
+
+    { "Cessna Flaps",       5, false, 120.0f, 60.0f, 2.0f,
+      0, 0.0f, CESSNA_FLAPS_DETENTS, 4, false, 0.0f,
+      0x1703, "FOC - Cessna Flaps" },
+
+    { "172RG Gear",        35, false,  90.0f, 45.0f, 5.0f,
+      0, 0.0f, CESSNA_GEAR_DETENTS, 2, false, 0.0f,
+      0x1704, "FOC - 172RG Gear" },
+
+    // --- Airbus A320 ---
+    //  A320 manual trim handwheel: ~3 full turns.
+    { "A320 Trim",         64, false, 1080.0f, 540.0f, 5.0f,
+      108, 0.15f, nullptr, 0, false, 0.0f,
+      0x3201, "FOC - A320 Trim" },
+
+    { "A320 Throttle",      7, false, 120.0f, 60.0f, 2.0f,
+      0, 0.0f, A320_THROTTLE_DETENTS, 6, true, 5.0f,
+      0x3202, "FOC - A320 Throttle" },
+
+    { "A320 Flaps",        11, false, 100.0f, 50.0f, 2.0f,
+      0, 0.0f, A320_FLAPS_DETENTS, 5, false, 0.0f,
+      0x3203, "FOC - A320 Flaps" },
+
+    { "A320 Spoilers",      2, false,  90.0f, 45.0f, 2.0f,
+      0, 0.0f, A320_SPOILER_DETENTS, 3, false, 0.0f,
+      0x3204, "FOC - A320 Spoilers" },
+
+    // --- Glider ---
+    //  Spring trim knob: ~2 full turns.
+    { "Glider Trim",       64, false, 720.0f, 360.0f, 5.0f,
+      72, 0.15f, nullptr, 0, false, 0.0f,
+      0x7001, "FOC - Glider Trim" },
+
+    { "Glider Spoiler",     2, false,  90.0f, 45.0f, 2.0f,
+      0, 0.0f, GLIDER_SPOILER_DETENTS, 2, false, 0.0f,
+      0x7002, "FOC - Glider Spoiler" },
+
+    // --- Bench Test ---
+    //  360° smooth travel for quality test suite (positions 0°–360°).
+    { "Bench Test",         0, false, 360.0f, 180.0f, 2.0f,
+      0, 0.0f, nullptr, 0, false, 0.0f,
+      0xFF00, "FOC - Bench Test" },
+};
 
 #endif  // CONFIG_H
 

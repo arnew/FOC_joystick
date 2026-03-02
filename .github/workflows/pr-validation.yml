@@ -1,0 +1,102 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ dev, main ]
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check branch naming
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Checking branch name: $BRANCH_NAME"
+          
+          # Git-flow branch naming convention
+          if [[ "$BRANCH_NAME" =~ ^(feature|hotfix|bugfix|experiment|release)/.+ ]]; then
+            echo "✅ Branch name follows git-flow convention"
+          else
+            echo "::warning::Branch name '$BRANCH_NAME' doesn't follow git-flow convention"
+            echo "Expected: feature/*, hotfix/*, bugfix/*, experiment/*, release/*"
+          fi
+
+      - name: Check commit messages
+        run: |
+          echo "Checking commit message format..."
+          
+          # Get commits in this PR
+          git log origin/${{ github.base_ref }}..${{ github.head_ref }} --pretty=format:"%s" > commit_messages.txt
+          
+          while IFS= read -r msg; do
+            # Check for conventional commit format: type: description
+            if [[ "$msg" =~ ^(feat|fix|docs|style|refactor|test|chore|perf|build|ci|revert)(\([a-z0-9_-]+\))?:\ .+ ]]; then
+              echo "✓ $msg"
+            else
+              echo "::notice::Commit message could follow conventional format: '$msg'"
+            fi
+          done < commit_messages.txt
+
+      - name: Check for merge conflicts
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          
+          if git merge-tree $(git merge-base HEAD origin/${{ github.base_ref }}) origin/${{ github.base_ref }} HEAD | grep -q "^changed in both"; then
+            echo "::error::Merge conflicts detected with base branch"
+            exit 1
+          else
+            echo "✅ No merge conflicts detected"
+          fi
+
+      - name: Check file size limits
+        run: |
+          echo "Checking for large files..."
+          
+          # Find files larger than 1MB
+          LARGE_FILES=$(find . -type f -size +1M -not -path "./.git/*" -not -path "./.pio/*" || true)
+          
+          if [ -n "$LARGE_FILES" ]; then
+            echo "::warning::Large files detected (>1MB):"
+            echo "$LARGE_FILES"
+          else
+            echo "✅ No large files detected"
+          fi
+
+  build:
+    uses: ./.github/workflows/build.yml
+
+  code-quality:
+    uses: ./.github/workflows/code-quality.yml
+
+  pr-summary:
+    runs-on: ubuntu-latest
+    needs: [validate-pr, build, code-quality]
+    if: always()
+    steps:
+      - name: PR validation summary
+        run: |
+          echo "## Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch & Commits | ${{ needs.validate-pr.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Quality | ${{ needs.code-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          if [ "${{ needs.validate-pr.result }}" = "success" ] && \
+             [ "${{ needs.build.result }}" = "success" ] && \
+             [ "${{ needs.code-quality.result }}" = "success" ]; then
+            echo "✅ **All validation checks passed** - PR ready for review" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "❌ **Some validation checks failed** - Please review issues above" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

@@ -1,0 +1,61 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [dev, feature/*]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+
+jobs:
+  function-size-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check function sizes (AGENTS.md compliance)
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          max_lines = 43
+          func_start = re.compile(r'^\s*[\w:<>~*&\s]+\s+[\w:~]+\s*\([^;]*\)\s*\{\s*$')
+          control_start = re.compile(r'^\s*(if|for|while|switch|else|do|catch)\b')
+
+          failures = []
+
+          for path in sorted(pathlib.Path('src').glob('*.cpp')):
+              lines = path.read_text(encoding='utf-8').splitlines()
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  if func_start.match(line) and not control_start.match(line):
+                      start = i
+                      sig = line.strip()
+                      depth = line.count('{') - line.count('}')
+                      i += 1
+                      while i < len(lines) and depth > 0:
+                          depth += lines[i].count('{') - lines[i].count('}')
+                          i += 1
+                      end = i - 1
+                      body_len = max(0, end - start - 1)
+                      if body_len > max_lines:
+                          failures.append(f"FAIL: {path}:{start + 1} - {sig} ({body_len} lines, max {max_lines})")
+                  else:
+                      i += 1
+
+          if failures:
+              print('\n'.join(failures))
+              sys.exit(1)
+
+          print('PASS: All functions ≤43 lines (AGENTS.md compliant)')
+          PY
+      
+      - name: Check code compilation
+        run: |
+          pip install platformio
+          platformio run -e pico_1motor_endless
