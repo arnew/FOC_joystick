@@ -98,3 +98,23 @@ float get_motor_target() {
 float get_motor_velocity() {
   return motor0.shaft_velocity;
 }
+
+BLDCMotor* get_motor_object() {
+  return &motor0;
+}
+
+void reset_motor_pid_integral() {
+  motor0.P_angle.reset();
+  motor0.PID_velocity.reset();
+}
+
+void center_motor_to(float desired_rad) {
+  // Shift SimpleFOC's coordinate system so that the current
+  // physical position reads as desired_rad.  The motor does NOT
+  // move — only the software reference frame changes.
+  // Formula: shaft_angle = sensor_dir * sensor_raw - sensor_offset
+  //   → sensor_offset = shaft_angle_raw - desired_rad
+  motor0.sensor_offset = motor0.shaft_angle - desired_rad;
+  target_angle  = desired_rad;
+  current_angle = desired_rad;
+}

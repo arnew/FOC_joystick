@@ -62,7 +62,7 @@ int16_t haptic_get_detent_index();
 /** Get the snapped target angle in degrees. */
 float haptic_get_target_deg();
 
-/** Get the HID axis value (0–1023) mapped from detent position. */
+/** Get the HID axis value (0–65535) mapped from detent position. */
 uint16_t haptic_get_hid_value();
 
 /** Set position externally (e.g. from T command). Snaps to nearest detent. */

@@ -95,7 +95,7 @@ Research compiled for verifying/correcting haptic feedback profiles in config.h.
 ### Landing Gear Lever
 - **Type**: Simple two-position lever (UP/DOWN) on center instrument panel.
 - **Behavior**: The lever has a positive lock in the DOWN position. Lift-and-push to move to UP.
-- **Not currently in firmware as a separate A320 profile** (the AIRCRAFT_PROFILES.md mentions it but config.h doesn't list it).
+- **Not currently in firmware as a separate A320 profile** (config.h doesn't list it).
 
 ---
 

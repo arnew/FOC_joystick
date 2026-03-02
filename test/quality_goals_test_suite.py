@@ -102,6 +102,7 @@ class Obs:
     target: float       # rad
     actual: float       # rad
     error: float        # rad (signed shortest-path)
+    rms: float          # rad (EMA RMS error)
     variance: float     # rad^2 (device rolling 0.5s window)
     settled: bool
     host_t: float       # time.time()
@@ -180,6 +181,37 @@ class DeviceLink:
         print("* No @T telemetry - is firmware up to date?")
         return False
 
+    def switch_profile(self, profile_id: int,
+                       reconnect_timeout: float = 15.0) -> bool:
+        """Send A<id> command.  Device reboots; wait and reconnect."""
+        if not self.ser:
+            return False
+        print(f"  Switching to profile {profile_id}...")
+        self.ser.write(f"A{profile_id}\n".encode())
+        time.sleep(0.3)
+
+        # Read response — "Already active" means no reboot needed
+        try:
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if self.ser.in_waiting:
+                    raw = self.ser.readline().decode(
+                        "utf-8", errors="ignore").strip()
+                    if "Already active" in raw:
+                        print(f"  Already on correct profile.")
+                        return True
+                    if "Rebooting" in raw:
+                        break
+                time.sleep(0.05)
+        except OSError:
+            pass  # device already rebooted mid-read
+
+        # Device is rebooting — close, wait, reconnect
+        self.close()
+        print(f"  Device rebooting for USB identity change...")
+        time.sleep(5.0)
+        return self.connect(timeout=reconnect_timeout)
+
     def send_target(self, angle_deg: float):
         """Send T<degrees> commander command."""
         if self.ser:
@@ -207,20 +239,21 @@ class DeviceLink:
 
     @staticmethod
     def _parse(line: str) -> Optional[Obs]:
-        """Parse '@T ms,target,actual,error,variance,settled'."""
+        """Parse '@T ms,target,actual,error,rms,variance,settled'."""
         if not line.startswith("@T "):
             return None
         try:
             parts = line[3:].split(",")
-            if len(parts) < 6:
+            if len(parts) < 7:
                 return None
             return Obs(
                 device_ms=int(parts[0]),
                 target=float(parts[1]),
                 actual=float(parts[2]),
                 error=float(parts[3]),
-                variance=float(parts[4]),
-                settled=parts[5].strip() == "1",
+                rms=float(parts[4]),
+                variance=float(parts[5]),
+                settled=parts[6].strip() == "1",
                 host_t=time.time(),
             )
         except (ValueError, IndexError):
@@ -740,6 +773,17 @@ Examples:
 
     suite = Suite(port=args.port, load=args.load,
                   verbose=not args.quiet, tests=test_list)
+
+    # Ensure bench-test profile is active (range=360°, center=180°)
+    bench_id = 10   # PROFILE_BENCH_TEST enum index
+    link = DeviceLink(port=args.port)
+    if link.connect(timeout=10.0):
+        if not link.switch_profile(bench_id):
+            print("* Failed to switch to Bench Test profile")
+            sys.exit(1)
+        link.close()
+    else:
+        sys.exit(1)
 
     if args.matrix:
         ok = suite.run_matrix(json_path=args.json)

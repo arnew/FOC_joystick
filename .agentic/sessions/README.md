@@ -1,40 +1,42 @@
-# Development Sessions
+# Development Sessions — Historical Archive
 
-Session notes, progress summaries, and issue analyses.
+Pre-v0.1-rc session logs from Feb 22–28, 2026. These document the journey
+from "motor doesn't move reliably" to a working 11-profile haptic joystick.
 
----
-
-## Documents
-
-- [SESSION_SUMMARY.md](SESSION_SUMMARY.md) - Latest session (quality eval + online parameters)
-- [SITUATION_ANALYSIS_AND_REWORK_PLAN.md](SITUATION_ANALYSIS_AND_REWORK_PLAN.md) - Motor reliability issues & rework plan (Feb 22, 2026)
-- [2026-02-27_AGENTIC_TESTING_UPDATE.md](2026-02-27_AGENTIC_TESTING_UPDATE.md) - Headless test enablement
+**Current project status** → see [../MILESTONES.md](../MILESTONES.md)
 
 ---
 
-## Latest Session
+## Key Documents
 
-**Date**: Feb 22, 2026
+| File | Topic |
+|------|-------|
+| [SITUATION_ANALYSIS_AND_REWORK_PLAN.md](SITUATION_ANALYSIS_AND_REWORK_PLAN.md) | Root-cause analysis: motor, comms, code structure |
+| [QUALITY_REVIEW_2026-02-28.md](QUALITY_REVIEW_2026-02-28.md) | Quality inspection — deviations list |
+| [TUNING_REPORT_2026-02-28.md](TUNING_REPORT_2026-02-28.md) | PID tuning results & methodology |
+| [ITERATION_4_MOTOR_IMPROVEMENTS.md](ITERATION_4_MOTOR_IMPROVEMENTS.md) | Motor control iteration history |
 
-**Accomplishments**:
-- ✅ Comprehensive tuning quality evaluation (87.6/100 baseline)
-- ✅ Online PID parameter transfer (10s iteration)
-- ✅ Configurable step response tests
+## Chronological Sessions (Feb 27–28)
 
-**Issues Identified**:
-- ❌ Motor doesn't move reliably
-- ❌ Communication unreliable (text-based protocol fragile)
-- ❌ Code difficult to maintain (monolithic structure)
+| File | Summary |
+|------|---------|
+| `2026-02-27_planning_phase.md` | Initial planning & task breakdown |
+| `2026-02-27_fire_execution_summary.md` | Emergency fixes: motor, comms |
+| `2026-02-27_autonomous_session_summary.md` | Autonomous agent session log |
+| `2026-02-27_hardware_test_*.md` | Hardware-in-loop test plan & status |
+| `2026-02-27_merge_*.md` | Branch merge readiness & completion |
+| `2026-02-27_CI-CD_final_status.md` | CI pipeline state |
+| `2026-02-28_*.md` | Aircraft profiles, hygiene, motor success, profile switching |
 
-See [SITUATION_ANALYSIS_AND_REWORK_PLAN.md](SITUATION_ANALYSIS_AND_REWORK_PLAN.md) for complete analysis and 4-week rework plan.
+## Other
 
----
+| File | Topic |
+|------|-------|
+| `BOOTSEL_REGRESSION_ANALYSIS.md` | BOOTSEL reboot regression |
+| `MOTOR_DEBUGGING_SESSION.md` | Motor debug trace |
+| `MOTOR_SWEEP_TROUBLESHOOTING.md` | Sweep test failures |
+| `REMOVED_UNTESTED_CODE.md` | Code removed for quality |
+| `QUALITY_VALIDATION_SUMMARY.md` | Validation summary |
+| `SESSION_SUMMARY.md` | Generic session summary |
 
-## Rework Plan
-
-**Phase 1**: Binary protocol with checksums (week 1)  
-**Phase 2**: Modularize firmware (week 2)  
-**Phase 3**: Python library extraction (week 3)  
-**Phase 4**: Diagnostics & validation (week 4)
-
-Target: 99%+ packet reliability, debuggable modules, automated testing.
+All issues above are **resolved** as of v0.1-rc (feature/v0.1-rc).

@@ -41,12 +41,12 @@
 // Iteration 18: Bump P 12→16 for stronger haptic detent clicks.
 //   LPF=0.001 keeps phase lag low, so P can go higher without oscillation.
 #define MOTOR0_PID_P  16.0f    // Stiff detent holding for haptic clicks
-#define MOTOR0_PID_I  0.2f     // Steady-state pull
+#define MOTOR0_PID_I  0.2f     // Steady-state pull (integral reset on detent change)
 #define MOTOR0_PID_D  1.0f     // Moderate damping (less D-kick than 2.0 at 2V)
 
 // Motor 0 Velocity Controller PID (for smooth transitions)
 #define MOTOR0_VELOCITY_P  0.1f     // Gentle velocity tracking
-#define MOTOR0_VELOCITY_I  0.5f     // Integral with reset on target change
+#define MOTOR0_VELOCITY_I  0.5f     // Integral with reset on detent change
 #define MOTOR0_VELOCITY_D  0.0f     // D for velocity loop
 
 // Motor 0 Limits

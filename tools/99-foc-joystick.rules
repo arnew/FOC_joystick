@@ -1,0 +1,19 @@
+# FOC Joystick — zero dead zone and fuzz
+#
+# Linux kernel auto-calculates flat=range/16 and fuzz=range/256 for
+# gamepad/joystick axes.  This device is a precision FOC motor encoder,
+# not a noisy analog stick — we want zero dead zone.
+#
+# Persistent install (needs root):
+#   sudo cp tools/99-foc-joystick.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   # Unplug/replug device (or reboot)
+#
+# Quick fix (no root, lost on replug):
+#   evdev-joystick --evdev /dev/input/event18 --deadzone 0
+#   evdev-joystick --evdev /dev/input/event18 --fuzz 0
+#
+# Vendor 0xCAFE, Products 0x1701-0x7002 (all FOC profiles)
+ACTION=="add|change", SUBSYSTEM=="input", ATTRS{idVendor}=="cafe", \
+  ENV{ID_INPUT_JOYSTICK}="1", \
+  RUN+="/bin/sh -c 'for f in /sys%p/device/input/input*/event*/device/id; do [ -d \"$(dirname $f)/../abs\" ] && for a in $(dirname $f)/../abs/abs_*; do [ -f \"$a/flat\" ] && echo 0 > \"$a/flat\"; [ -f \"$a/fuzz\" ] && echo 0 > \"$a/fuzz\"; done; done'"

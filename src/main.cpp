@@ -62,9 +62,9 @@ static void service_hid_output(unsigned long now_ms) {
   }
   // Apply axis reversal from active profile
   if (get_active_control_profile()->reversed) {
-    axis_values[0] = 1023 - axis_values[0];
+    axis_values[0] = 65535 - axis_values[0];
   }
-  axis_values[1] = 512;  // Y-axis placeholder (single-motor system)
+  axis_values[1] = 32768;  // Y-axis placeholder (single-motor system)
   send_hid_report();
   last_hid_ms = now_ms;
 }
@@ -141,7 +141,16 @@ void setup() {
 
   // Initialize haptic layer (runtime enable/disable via WE0/WE1)
   haptic_init();
-  
+
+  // Center the motor coordinate system to the profile's center_deg.
+  // The motor stays put; only the software reference frame shifts
+  // so the HID axis starts at 50% with equal range in each direction.
+  {
+    float center_rad = get_active_control_profile()->center_deg
+                     * (PI / 180.0f);
+    center_motor_to(center_rad);
+  }
+
   // Print configuration
   print_configuration();
 }
@@ -156,7 +165,7 @@ void loop() {
   update_motor();
 
   // 2. Feed telemetry ring buffer (every FOC tick)
-  telemetry_update(target_angle, current_angle);
+  telemetry_update(get_motor_target(), get_motor_angle());
 
   // 3. Haptic: observe actual → snap to detent → set target
   haptic_update();

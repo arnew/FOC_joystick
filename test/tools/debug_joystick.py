@@ -35,10 +35,10 @@ def monitor():
                 
                 # Look for debug output with angle and USB value
                 if "Angle:" in line and "USB:" in line:
-                    # Parse: "Angle: X.XXXX rad (X.X°) | Target: X.XXXX | USB: XXX (0-1023)"
+                    # Parse: "Angle: X.XXXX rad (X.X°) | Target: X.XXXX | USB: XXX (0-65535)"
                     try:
                         import re
-                        angle_m = re.search(r'Angle:\s+([-\d.]+)', line)
+                        angle_m = re.search(r'Angle:\s+([\-\d.]+)', line)
                         usb_m = re.search(r'USB:\s+(\d+)', line)
                         
                         if angle_m and usb_m:
@@ -46,7 +46,7 @@ def monitor():
                             usb_val = int(usb_m.group(1))
                             angle_deg = angle * 180 / 3.14159
                             
-                            bar_len = int(usb_val / 1023 * 40)
+                            bar_len = int(usb_val / 65535 * 40)
                             bar = "█" * bar_len + "░" * (40 - bar_len)
                             
                             print(f"  {angle:7.4f} rad  {usb_val:4d}    {bar}")
