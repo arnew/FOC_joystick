@@ -7,6 +7,7 @@ Automated testing and debug tools for the USB HID joystick controller.
 ```
 test/
 ├─ quality_goals_test_suite.py   ← THE active test suite (8 tests, 6 sequences)
+├─ test_cessna_trim.py           ← Cessna Trim linearity & endstop test
 ├─ tools/                        Debug & diagnostic scripts (interactive)
 ├─ unit/                         Headless unit tests (pytest)
 └─ archive/                      Superseded tests (reference only)
@@ -22,6 +23,16 @@ python3 test/quality_goals_test_suite.py
 
 Runs 8 tests (A–H) across configurable position sequences.
 Sends Commander `T` commands (degrees) over serial, reads back angle telemetry.
+
+### Cessna Trim Linearity Test (requires device)
+
+```bash
+python3 test/test_cessna_trim.py
+python3 test/test_cessna_trim.py --json cessna_trim.json
+```
+
+Sweeps the full 6480° range forward and reverse, checks linearity
+(max error, hysteresis, slope), then verifies both endstops clamp correctly.
 
 ### Headless Unit Tests
 
