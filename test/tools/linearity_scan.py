@@ -31,8 +31,10 @@ import serial
 import struct
 import subprocess
 import sys
+import termios
 import threading
 import time
+import tty
 from dataclasses import dataclass, field
 
 
@@ -499,7 +501,7 @@ class LinearityScan:
                            f"bounce={delta_hid} ({delta_deg:.1f}°)")
             out.append("")
 
-        out.append("  Turn wheel slowly across full range.  Ctrl+C for report.")
+        out.append("  Keys: 1-9 jump to 0%–100%  |  Turn wheel for coverage  |  Ctrl+C for report")
         print(CLEAR + "\n".join(out), flush=True)
 
     # ── Report ───────────────────────────────────────────────────
@@ -596,6 +598,19 @@ class LinearityScan:
         print()
         print("=" * 66)
 
+    # ── Jump-to-position ─────────────────────────────────────────
+
+    def _jump_to(self, key_num):
+        """Jump motor to position for key 1-9 (1=0%, 5=50%, 9=100%)."""
+        if self.range_min is None or self.range_max is None:
+            return
+        frac = (key_num - 1) / 8.0
+        target_deg = self.range_min + frac * (self.range_max - self.range_min)
+        try:
+            self._ser.write(f"T{target_deg:.1f}\n".encode())
+        except Exception:
+            pass
+
     # ── Main loop ────────────────────────────────────────────────
 
     def run(self):
@@ -630,15 +645,25 @@ class LinearityScan:
             self._stop.set()
             sys.exit(1)
 
-        # Display loop
+        # Set terminal to raw mode for non-blocking keypress reading
+        old_termios = termios.tcgetattr(sys.stdin)
         try:
+            tty.setcbreak(sys.stdin.fileno())
             while not self._stop.is_set():
-                time.sleep(0.15)
+                # Check for keypress (non-blocking via select)
+                r, _, _ = select.select([sys.stdin], [], [], 0.15)
+                if r:
+                    ch = sys.stdin.read(1)
+                    if ch == '\x03':        # Ctrl+C
+                        break
+                    if ch in '123456789':
+                        self._jump_to(int(ch))
                 self._record()
                 self._render()
         except KeyboardInterrupt:
             pass
         finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_termios)
             self._stop.set()
             self._print_report()
 
