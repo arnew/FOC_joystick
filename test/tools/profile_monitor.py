@@ -222,22 +222,35 @@ def fmt_telemetry(ms, tgt, act, err, rms, settled):
     )
 
 
-# ── Joystick monitor thread ──────────────────────────────────────────
+# ── Joystick monitor thread (evdev) ──────────────────────────────────
+#
+# Reads from /dev/input/eventN (evdev layer) instead of /dev/input/jsN
+# (joydev layer).  The joydev layer applies a correction table that
+# distorts values until jscal resets it.  evdev gives the raw HID
+# values (0–65535) with no mangling.
 
-JS_EVENT_FMT = "IhBB"       # time(u32) value(s16) type(u8) number(u8)
-JS_EVENT_SIZE = struct.calcsize(JS_EVENT_FMT)
-JS_EVENT_AXIS = 0x02
-JS_EVENT_INIT = 0x80
+EV_ABS = 3
+ABS_NAMES = {0: "X", 1: "Y"}
+
+# 64-bit Linux: struct input_event = timeval(16) + type(2) + code(2) + value(4)
+EVDEV_FMT = "llHHi"
+EVDEV_SIZE = struct.calcsize(EVDEV_FMT)
+
+
+def _eviocgabs(axis):
+    """EVIOCGABS(axis) ioctl number — reads struct input_absinfo (24 bytes)."""
+    return (2 << 30) | (24 << 16) | (0x45 << 8) | (0x40 + axis)
+
 
 class JoystickMonitor(threading.Thread):
-    """Read Linux /dev/input/js* events and print axis changes."""
+    """Read evdev events from /dev/input/eventN and print axis changes."""
 
-    def __init__(self, path, name):
+    def __init__(self, path, name="FOC Joystick"):
         super().__init__(daemon=True)
         self.path = path
         self.name = name
         self._stop = threading.Event()
-        self.axes = {}            # axis_num → raw value (-32767..32767)
+        self.axes = {}            # code → raw value (0–65535)
 
     def stop(self):
         self._stop.set()
@@ -250,27 +263,42 @@ class JoystickMonitor(threading.Thread):
             return
 
         print(f"  [joystick] {self.name}  ({self.path})")
+
+        # Read initial axis values via absinfo ioctl
+        import fcntl
+        for code in sorted(ABS_NAMES):
+            try:
+                buf = bytearray(24)
+                fcntl.ioctl(fd, _eviocgabs(code), buf)
+                value = struct.unpack("iiiiii", buf)[0]
+                self.axes[code] = value
+                pct = value / 65535 * 100
+                bar = "█" * int(pct / 2.5) + "░" * (40 - int(pct / 2.5))
+                axis_name = ABS_NAMES.get(code, f"?{code}")
+                print(
+                    f"  [axis {axis_name}] {value:5d}/65535 "
+                    f"({pct:5.1f}%) {bar} (init)")
+            except Exception:
+                pass
         try:
             while not self._stop.is_set():
                 r, _, _ = select.select([fd], [], [], 0.2)
                 if not r:
                     continue
-                data = os.read(fd, JS_EVENT_SIZE * 16)
-                for off in range(0, len(data), JS_EVENT_SIZE):
-                    chunk = data[off:off + JS_EVENT_SIZE]
-                    if len(chunk) < JS_EVENT_SIZE:
+                data = os.read(fd, EVDEV_SIZE * 16)
+                for off in range(0, len(data), EVDEV_SIZE):
+                    chunk = data[off:off + EVDEV_SIZE]
+                    if len(chunk) < EVDEV_SIZE:
                         break
-                    ts, value, typ, number = struct.unpack(JS_EVENT_FMT, chunk)
-                    if typ & JS_EVENT_AXIS:
-                        self.axes[number] = value
-                        # Convert -32767..32767 → 0..65535 (matches HID descriptor)
-                        val = int((value + 32767) / 65534 * 65535)
-                        pct = val / 65535 * 100
+                    _, _, typ, code, value = struct.unpack(EVDEV_FMT, chunk)
+                    if typ == EV_ABS:
+                        self.axes[code] = value
+                        pct = value / 65535 * 100
                         bar = "█" * int(pct / 2.5) + "░" * (40 - int(pct / 2.5))
-                        init = " (init)" if typ & JS_EVENT_INIT else ""
+                        axis_name = ABS_NAMES.get(code, f"?{code}")
                         print(
-                            f"  [axis {number}] {val:5d}/65535 "
-                            f"({pct:5.1f}%) {bar}{init}"
+                            f"  [axis {axis_name}] {value:5d}/65535 "
+                            f"({pct:5.1f}%) {bar}"
                         )
         except OSError:
             pass
@@ -352,12 +380,18 @@ def main():
         # Small delay for USB re-enum if profile was just switched
         if args.profile is not None and ser_mon:
             time.sleep(1)
-        js_path, js_name = find_joystick()
-        if js_path:
-            joy_mon = JoystickMonitor(js_path, js_name)
+        ev_path, _ = find_foc_input_devices()
+        if ev_path:
+            joy_mon = JoystickMonitor(ev_path)
             joy_mon.start()
         else:
-            print("  [joystick] no /dev/input/js* found — skipping")
+            # Fallback: try joydev
+            js_path, js_name = find_joystick()
+            if js_path:
+                print(f"  [joystick] evdev not found, using joydev {js_path}")
+                print(f"  [joystick] WARNING: joydev may show distorted values")
+            else:
+                print("  [joystick] no input device found — skipping")
 
     # ── Run until Ctrl+C ──────────────────────────────────────────
     if not ser_mon and not joy_mon:
