@@ -10,6 +10,11 @@
 2. **[AGENT_GUIDELINES.md](AGENT_GUIDELINES.md)** — Rules, housekeeping, observability
 3. **[KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)** — Working baseline, known issues
 
+**Root-level documents** (referenced by [AGENTS.md](../AGENTS.md)):
+- **[REQUIREMENTS.md](../REQUIREMENTS.md)** — SOPHIST-style requirements, traceability
+- **[ROADMAP.md](../ROADMAP.md)** — Version increments, backlog
+- **[MILESTONES.md](MILESTONES.md)** — Detailed exit criteria, hardware plans
+
 ---
 
 ## Directory Structure
