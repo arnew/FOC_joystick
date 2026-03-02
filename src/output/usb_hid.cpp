@@ -28,7 +28,7 @@ typedef struct {
 hid_joystick_report_t;
 
 static hid_joystick_report_t 
-  current_report = {0, 32768, 32768};
+  current_report = {0, UINT16_MAX, UINT16_MAX};
 
 // ============================================================================
 // USB HID SETUP
