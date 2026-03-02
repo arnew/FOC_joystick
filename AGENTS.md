@@ -13,6 +13,7 @@ Knowledge base files need to be readable by a human in about 5 minutes.
 All code patches/commits should follow the Linux Kernel Mailing List guidance for patches.
 DO NOT LITTER: Put files in (sub-)folders. Start new files only after having a holistic look at the setup.
 Pay off your debts.
+Those who forget history are doomed to repeat it.
 
 **Philosophy**:
 UNIX - KISS: 
