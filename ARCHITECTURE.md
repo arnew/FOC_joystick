@@ -143,19 +143,19 @@ All adjustable at runtime via Commander `W` commands:
 
 11 control profiles defined in `config.h` as `ALL_PROFILES[]`:
 
-| # | Profile         | MIDI CC | Range° | Detents    | Gate |
-|---|-----------------|---------|--------|------------|------|
-| 0 | Cessna Trim     | 1       | 360    | 18 uniform | no   |
-| 1 | Cessna Throttle | 2       | 180    | smooth     | no   |
-| 2 | Cessna Flaps    | 3       | 120    | 5 map      | no   |
-| 3 | Cessna Gear     | 4       | 90     | 2 map      | no   |
-| 4 | A320 Trim       | 5       | 180    | 24 uniform | no   |
-| 5 | A320 Throttle   | 6       | 120    | 6 map      | yes  |
-| 6 | A320 Flaps      | 7       | 90     | 5 map      | no   |
-| 7 | A320 Spoilers   | 8       | 90     | 3 map      | no   |
-| 8 | Glider Trim     | 9       | 360    | 24 uniform | no   |
-| 9 | Glider Spoiler  | 10      | 90     | 2 map      | no   |
-|10 | Bench Test      | 11      | 360    | 36 uniform | no   |
+| # | Profile         | MIDI CC | Range°  | Detents      | Gate |
+|---|-----------------|---------|---------|--------------|------|
+| 0 | Cessna Trim     | 64      | 6480    | 648 uniform  | no   |
+| 1 | Cessna Throttle | 7       | 180     | smooth       | no   |
+| 2 | Cessna Flaps    | 5       | 120     | 4 map        | no   |
+| 3 | 172RG Gear      | 35      | 90      | 2 map        | no   |
+| 4 | A320 Trim       | 64      | 1080    | 108 uniform  | no   |
+| 5 | A320 Throttle   | 7       | 120     | 6 map        | yes  |
+| 6 | A320 Flaps      | 11      | 100     | 5 map        | no   |
+| 7 | A320 Spoilers   | 2       | 90      | 3 map        | no   |
+| 8 | Glider Trim     | 64      | 720     | 72 uniform   | no   |
+| 9 | Glider Spoiler  | 2       | 90      | 2 map        | no   |
+|10 | Bench Test      | 0       | 360     | smooth       | no   |
 
 Queryable from the device: `A` lists all profiles, `A3` switches.
 
@@ -270,13 +270,14 @@ entirely.  The design direction (v0.2+):
 This separates "what motor am I driving?" from "what does this axis
 feel like?" — allowing any profile on any hardware.
 
-### 2. Global state coupling
+### 2. Global state coupling — RESOLVED (v0.1)
 
-`target_angle`, `current_angle`, and motor objects are bare globals
-in `motor_control.h`.  Acceptable for single-motor embedded code, but
-limits testability and multi-motor scaling.
+Motor objects and state are now private to `motor_control.cpp`.
+All access goes through API functions (`get_motor_angle()`,
+`get_motor_target()`, `get_motor_object()`, etc.).
 
-### 3. config.h split-brain
+### 3. config.h split-brain — RESOLVED (v0.1)
 
-Declares `g_active_profile` extern and getter/setter prototypes, but
-definitions live in `profile_manager.cpp`.  Not self-contained.
+Runtime profile state (`g_active_profile`, getters/setters) moved
+from `config.h` to `profile_manager.h`.  `config.h` is now purely
+declarative (struct definitions + profile table).

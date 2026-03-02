@@ -20,6 +20,7 @@
 #include "haptic_layer.h"
 #include "motor_control.h"
 #include "config.h"
+#include "profile_manager.h"
 #include <math.h>
 
 // ============================================================================

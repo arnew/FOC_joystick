@@ -198,23 +198,5 @@ static const ControlProfile ALL_PROFILES[NUM_PROFILES] = {
       0xFF00, "FOC - Bench Test" },
 };
 
-// ============================================================================
-// RUNTIME STATE
-// ============================================================================
-
-extern volatile uint8_t g_active_profile;
-
-void set_active_profile(uint8_t profile);
-uint8_t get_active_profile();
-
-/**
- * Get active control profile (read-only).
- */
-static inline const ControlProfile* get_active_control_profile() {
-    if (g_active_profile < NUM_PROFILES)
-        return &ALL_PROFILES[g_active_profile];
-    return &ALL_PROFILES[0];
-}
-
 #endif  // CONFIG_H
 

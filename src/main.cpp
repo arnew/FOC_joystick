@@ -165,7 +165,7 @@ void loop() {
   update_motor();
 
   // 2. Feed telemetry ring buffer (every FOC tick)
-  telemetry_update(target_angle, current_angle);
+  telemetry_update(get_motor_target(), get_motor_angle());
 
   // 3. Haptic: observe actual → snap to detent → set target
   haptic_update();

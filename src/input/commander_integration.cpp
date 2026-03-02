@@ -58,7 +58,7 @@ static void cmd_set_target(char* cmd) {
 // Motor command passthrough for runtime PID tuning.
 // Registered as 'M' → user sends MAP10.0 for angle P, etc.
 static void cmd_motor(char* cmd) {
-  commander.motor(&motor0, cmd);
+  commander.motor(get_motor_object(), cmd);
 }
 
 // Custom command: Profile switching

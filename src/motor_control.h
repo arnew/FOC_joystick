@@ -3,6 +3,9 @@
  *
  * One BLDC motor (7pp) + AS5600 I2C sensor, angle mode.
  * Motor angle is unbounded (-∞ to +∞).
+ *
+ * All motor state is private to motor_control.cpp.
+ * Access only through the functions below.
  */
 
 #ifndef MOTOR_CONTROL_H
@@ -10,22 +13,6 @@
 
 #include <Arduino.h>
 #include <SimpleFOC.h>
-#include "config.h"
-
-// ============================================================================
-// MOTOR HARDWARE
-// ============================================================================
-
-extern MagneticSensorI2C sensor0;
-extern BLDCMotor motor0;
-extern BLDCDriver3PWM driver0;
-
-// ============================================================================
-// MOTOR STATE
-// ============================================================================
-
-extern float target_angle;
-extern float current_angle;
 
 // ============================================================================
 // API
@@ -39,5 +26,8 @@ float get_motor_target();
 float get_motor_velocity();
 void  reset_motor_pid_integral();  // zero I-term accumulators
 void  center_motor_to(float desired_rad);  // offset sensor so current pos = desired
+
+/** Direct access to BLDCMotor for Commander PID tuning passthrough. */
+BLDCMotor* get_motor_object();
 
 #endif // MOTOR_CONTROL_H

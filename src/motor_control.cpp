@@ -99,6 +99,10 @@ float get_motor_velocity() {
   return motor0.shaft_velocity;
 }
 
+BLDCMotor* get_motor_object() {
+  return &motor0;
+}
+
 void reset_motor_pid_integral() {
   motor0.P_angle.reset();
   motor0.PID_velocity.reset();
